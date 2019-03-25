@@ -1,0 +1,18 @@
+{
+	"name": "react-native-rfid-barcode-zebra",
+	"version": "1.0.0",
+	"description": "## Getting started",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [
+		"react-native"
+	],
+	"author": "yaoweili",
+	"license": "ISC",
+	"peerDependencies": {
+		"react-native": "^0.41.2",
+		"lodash": "4.17.11"
+	}
+}
