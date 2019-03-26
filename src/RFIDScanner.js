@@ -2,7 +2,7 @@ import { NativeModules, DeviceEventEmitter } from 'react-native';
 import { RFIDScannerEvent } from './RFIDScannerEvent';
 import _ from 'lodash';
 
-const rfidScannerManager = NativeModules.RFIDScannerManager;
+const rfidScannerManager = NativeModules.RNRfidBarcodeZebra;
 
 let instance = null;
 
