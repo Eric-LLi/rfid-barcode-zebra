@@ -6,6 +6,6 @@ export const RFIDScannerEvent = {
 	BARCODE: 'barcode',
 	LOCATE_TAG: 'locateTag',
 	triggerAction: 'triggerAction',
-	RFID_Status: 'RFIDStatus',
+	RFID_Status: 'RFIDStatusEvent',
 	BarcodeError: 'barcodeError'
 };

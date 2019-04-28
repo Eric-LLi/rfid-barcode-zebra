@@ -13,10 +13,6 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.Callback;
-import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.Callback;
 
 public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
 
@@ -32,17 +28,20 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 
 			@Override
 			public void dispatchEvent(String name, WritableMap data) {
-				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				RNRfidBarcodeZebraModule.this.reactContext
+						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
 			}
 
 			@Override
 			public void dispatchEvent(String name, String data) {
-				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				RNRfidBarcodeZebraModule.this.reactContext
+						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
 			}
 
 			@Override
 			public void dispatchEvent(String name, WritableArray data) {
-				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				RNRfidBarcodeZebraModule.this.reactContext
+						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
 			}
 		};
 		scannerthread.start();
@@ -84,6 +83,20 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
+	public void GetAvailableBluetoothDevices(Callback callback) {
+		if (this.scannerthread != null) {
+			callback.invoke(this.scannerthread.GetAvailableBluetoothDevices());
+		}
+	}
+
+	@ReactMethod
+	public void SaveSelectedScanner(String item) {
+		if (this.scannerthread != null) {
+			this.scannerthread.SaveSelectedScanner(item);
+		}
+	}
+
+	@ReactMethod
 	public void init() {
 		if (this.scannerthread != null) {
 			this.scannerthread.init(reactContext);
@@ -98,9 +111,9 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void barcodeConnect(Callback callback) {
+	public void barcodeConnect() {
 		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.barcodeConnect());
+			this.scannerthread.barcodeConnect();
 		}
 	}
 
@@ -108,6 +121,20 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	public void barcodeDisconnect() {
 		if (this.scannerthread != null) {
 			this.scannerthread.barcodeDisconnect();
+		}
+	}
+
+	@ReactMethod
+	public void barcodePullTrigger() {
+		if (this.scannerthread != null) {
+			this.scannerthread.barcodePullTrigger();
+		}
+	}
+
+	@ReactMethod
+	public void barcodeReleaseTrigger() {
+		if (this.scannerthread != null) {
+			this.scannerthread.barcodeReleaseTrigger();
 		}
 	}
 
@@ -140,6 +167,27 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
+	public void TagITMode(boolean isTagITMode) {
+		if (this.scannerthread != null) {
+			this.scannerthread.TagITMode(isTagITMode);
+		}
+	}
+
+	@ReactMethod
+	public void TagITReadBarcode(boolean isReadBarcode) {
+		if (this.scannerthread != null) {
+			this.scannerthread.TagITReadBarcode(isReadBarcode);
+		}
+	}
+
+	@ReactMethod
+	public void AuditMode(boolean isAuditMode) {
+		if (this.scannerthread != null) {
+			this.scannerthread.AuditMode(isAuditMode);
+		}
+	}
+
+	@ReactMethod
 	public void locateTag(String tag) {
 		if (this.scannerthread != null) {
 			this.scannerthread.LoopForLocateTag();
@@ -147,9 +195,9 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void writeTag(String sourceTag, String targetTag, Callback callback) {
+	public void writeTag(String targetTag, String newTag, Callback callback) {
 		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.writeTag(sourceTag, targetTag));
+			callback.invoke(this.scannerthread.writeTag(targetTag, newTag));
 		}
 	}
 
