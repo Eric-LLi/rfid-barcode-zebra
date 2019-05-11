@@ -249,4 +249,11 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 			callback.invoke(this.scannerthread.saveAntennaConfig(config));
 		}
 	}
+
+	@ReactMethod
+	public void ChangeBeeperVolume(boolean value) {
+		if (this.scannerthread != null) {
+			this.scannerthread.ChangeBeeperVolume(value);
+		}
+	}
 }

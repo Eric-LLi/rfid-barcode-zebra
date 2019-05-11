@@ -30,6 +30,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	boolean tempDisconnected = false;
 	private Boolean reading = false;
 	private ReadableMap config = null;
+	private ArrayList<String> scannedTags = new ArrayList<>();
 
 	// Save scanner name
 	private String selectedScanner = null;
@@ -462,6 +463,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 
 	private void CheckBarcodeRFIDConnection() {
 		if (rfidReaderDevice.getRFIDReader().isConnected() && barcodeDeviceConnected) {
+			// ChangeBeeperVolume(false);
 			WritableMap event = Arguments.createMap();
 			event.putString("RFIDStatusEvent", "connected");
 			this.dispatchEvent("RFIDStatusEvent", event);
@@ -884,12 +886,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 			if (!isLocateMode) {
 				isLocatingTag = true;
 				this.LoopForLocateTag();
-				if (isAuditMode)
-					ChangeBeeperVolume(0);
-			} else {
-				if (isAuditMode)
-					ChangeBeeperVolume(1);
-
 			}
 		}
 	}
@@ -906,19 +902,19 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
 			isAuditMode = value;
 
-			if (isAuditMode) {
-				ChangeBeeperVolume(0);
-			} else {
-				ChangeBeeperVolume(1);
-			}
+			// if (isAuditMode) {
+			// ChangeBeeperVolume(0);
+			// } else {
+			// ChangeBeeperVolume(1);
+			// }
 		}
 	}
 
-	private void ChangeBeeperVolume(int vol) {
+	public void ChangeBeeperVolume(boolean value) {
 		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
 			try {
 				rfidReaderDevice.getRFIDReader().Config
-						.setBeeperVolume(vol == 1 ? BEEPER_VOLUME.HIGH_BEEP : BEEPER_VOLUME.QUIET_BEEP);
+						.setBeeperVolume(value ? BEEPER_VOLUME.HIGH_BEEP : BEEPER_VOLUME.QUIET_BEEP);
 			} catch (InvalidUsageException e) {
 				Log.i("ChangeBeeperVolume", e.getInfo());
 			} catch (OperationFailureException e) {
@@ -938,6 +934,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	public void cleanTags() {
 		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
 			rfidReaderDevice.getRFIDReader().Actions.purgeTags();
+			scannedTags = new ArrayList<>();
 		}
 	}
 
@@ -1084,7 +1081,17 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 							this.dispatchEvent("TagEvent", myTags[index].getTagID());
 							break;
 						} else {
-							this.dispatchEvent("TagEvent", myTags[index].getTagID());
+							boolean result = false;
+							for (int i = 0; i < scannedTags.size(); i++) {
+								if (scannedTags.get(i).equals(myTags[index].getTagID())) {
+									result = true;
+									break;
+								}
+							}
+							if (!result) {
+								scannedTags.add(myTags[index].getTagID());
+								this.dispatchEvent("TagEvent", myTags[index].getTagID());
+							}
 						}
 					}
 				}
@@ -1134,8 +1141,10 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					barcodeReleaseTrigger();
 				} else {
 					this.cancel();
+					rfidReaderDevice.getRFIDReader().Actions.purgeTags();
+					// cleanTags();
 					if (isTagITMode || isAuditMode) {
-						cleanTags();
+
 					}
 				}
 			}

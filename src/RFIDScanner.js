@@ -230,6 +230,9 @@ export class RFIDScanner {
 		rfidScannerManager.shutdown();
 	}
 
+	ChangeBeeperVolume(value){
+		rfidScannerManager.ChangeBeeperVolume(value);
+	}
 	on(event, callback) {
 		// if (!this.oncallbacks[event]) {
 		// 	this.oncallbacks[event] = [];
