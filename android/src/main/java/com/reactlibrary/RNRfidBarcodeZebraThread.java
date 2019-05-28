@@ -122,6 +122,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (this.reading) {
 			this.cancel();
 		}
+		ChangeBeeperVolume(true);
 		shutdown();
 		barcodeDisconnect();
 	}
@@ -130,6 +131,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (this.reading) {
 			this.cancel();
 		}
+		ChangeBeeperVolume(true);
 		shutdown();
 		barcodeDisconnect();
 	}

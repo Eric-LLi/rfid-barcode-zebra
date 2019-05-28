@@ -233,6 +233,10 @@ export class RFIDScanner {
 	ChangeBeeperVolume(value){
 		rfidScannerManager.ChangeBeeperVolume(value);
 	}
+	OpenAndroidSetting = () => {
+		rfidScannerManager.OpenAndroidSetting();
+	};
+	
 	on(event, callback) {
 		// if (!this.oncallbacks[event]) {
 		// 	this.oncallbacks[event] = [];

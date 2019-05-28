@@ -1,6 +1,8 @@
 
 package com.reactlibrary;
 
+import android.content.Intent;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.facebook.react.modules.core.DeviceEventManagerModule;
@@ -255,5 +257,10 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 		if (this.scannerthread != null) {
 			this.scannerthread.ChangeBeeperVolume(value);
 		}
+	}
+
+	@ReactMethod
+	public void OpenAndroidSetting() {
+		reactContext.startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));
 	}
 }
