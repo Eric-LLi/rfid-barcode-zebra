@@ -4,17 +4,13 @@ package com.reactlibrary;
 import android.content.Intent;
 import android.provider.Settings;
 import android.util.Log;
-
-import com.facebook.react.modules.core.DeviceEventManagerModule;
-
+import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableArray;
-import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.bridge.LifecycleEventListener;
-import com.facebook.react.bridge.Callback;
+
+
 
 public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
 
@@ -30,20 +26,17 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 
 			@Override
 			public void dispatchEvent(String name, WritableMap data) {
-				RNRfidBarcodeZebraModule.this.reactContext
-						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
 			}
 
 			@Override
 			public void dispatchEvent(String name, String data) {
-				RNRfidBarcodeZebraModule.this.reactContext
-						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
 			}
 
 			@Override
 			public void dispatchEvent(String name, WritableArray data) {
-				RNRfidBarcodeZebraModule.this.reactContext
-						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
 			}
 		};
 		scannerthread.start();
@@ -85,9 +78,36 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void GetAvailableBluetoothDevices(Callback callback) {
+	public void InitialThread() {
+		this.scannerthread = new RNRfidBarcodeZebraThread(this.reactContext) {
+
+			@Override
+			public void dispatchEvent(String name, WritableMap data) {
+				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+			}
+
+			@Override
+			public void dispatchEvent(String name, String data) {
+				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+			}
+
+			@Override
+			public void dispatchEvent(String name, WritableArray data) {
+				RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+			}
+		};
+		scannerthread.start();
+	}
+
+	@ReactMethod
+	public void GetAvailableBluetoothDevices(Promise promise) {
 		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.GetAvailableBluetoothDevices());
+			try {
+				WritableArray array = this.scannerthread.GetAvailableBluetoothDevices();
+				promise.resolve(array);
+			} catch (Exception err) {
+				promise.reject(err);
+			}
 		}
 	}
 
@@ -99,30 +119,56 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void init() {
+	public void init(Promise promise) {
 		if (this.scannerthread != null) {
 			this.scannerthread.init(reactContext);
 		}
+		promise.resolve("init");
 	}
 
 	@ReactMethod
-	public void isConnected(Callback callback) {
+	public void isConnected(Promise promise) {
 		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.isConnected());
+			promise.resolve(this.scannerthread.isConnected());
 		}
 	}
 
 	@ReactMethod
-	public void barcodeConnect() {
+	public void AttemptToReconnect(Promise promise) {
+		try {
+			if (this.scannerthread != null) {
+				promise.resolve(this.scannerthread.AttemptToReconnect());
+			}
+		} catch (Exception err) {
+			promise.reject(err);
+		}
+
+	}
+
+	@ReactMethod
+	public void barcodeConnect(Promise promise) {
 		if (this.scannerthread != null) {
 			this.scannerthread.barcodeConnect();
 		}
+		promise.resolve("barcodeConnect");
 	}
 
 	@ReactMethod
 	public void barcodeDisconnect() {
 		if (this.scannerthread != null) {
 			this.scannerthread.barcodeDisconnect();
+		}
+	}
+
+	@ReactMethod
+	public void SaveCurrentRoute(String value, Promise promise) {
+		try {
+			if (this.scannerthread != null) {
+				this.scannerthread.SaveCurrentRoute(value);
+			}
+			promise.resolve("Done");
+		} catch (Exception err) {
+			promise.reject(err);
 		}
 	}
 
@@ -176,9 +222,10 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void TagITReadBarcode(boolean isReadBarcode) {
+	public void TagITReadBarcode(boolean isReadBarcode, Promise promise) {
 		if (this.scannerthread != null) {
 			this.scannerthread.TagITReadBarcode(isReadBarcode);
+			promise.resolve("Done");
 		}
 	}
 
@@ -197,10 +244,15 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void writeTag(String targetTag, String newTag, Callback callback) {
-		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.writeTag(targetTag, newTag));
+	public void writeTag(String targetTag, String newTag, Promise promise) {
+		try {
+			if (this.scannerthread != null) {
+				promise.resolve(this.scannerthread.writeTag(targetTag, newTag));
+			}
+		} catch (Exception err) {
+			promise.reject(err);
 		}
+
 	}
 
 	@ReactMethod
@@ -246,9 +298,13 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void saveAntennaConfig(ReadableMap config, Callback callback) {
+	public void saveAntennaConfig(ReadableMap config, Promise promise) {
 		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.saveAntennaConfig(config));
+			try {
+				promise.resolve(this.scannerthread.saveAntennaConfig(config));
+			} catch (Exception err) {
+				promise.reject(err);
+			}
 		}
 	}
 

@@ -22,7 +22,7 @@ import static com.facebook.react.bridge.UiThreadUtil.runOnUiThread;
 public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEventsListener, IDcsSdkApiDelegate {
 
 	private ReactApplicationContext context;
-
+	private String currentRoute = null;
 	// RFID
 	private Readers readers = null;
 	private ArrayList<ReaderDevice> deviceList = null;
@@ -31,6 +31,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	private Boolean reading = false;
 	private ReadableMap config = null;
 	private ArrayList<String> scannedTags = new ArrayList<>();
+	private int batteryLevel = -1;
 
 	// Save scanner name
 	private String selectedScanner = null;
@@ -122,7 +123,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (this.reading) {
 			this.cancel();
 		}
-		ChangeBeeperVolume(true);
 		shutdown();
 		barcodeDisconnect();
 	}
@@ -131,7 +131,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (this.reading) {
 			this.cancel();
 		}
-		ChangeBeeperVolume(true);
 		shutdown();
 		barcodeDisconnect();
 	}
@@ -467,7 +466,9 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (rfidReaderDevice.getRFIDReader().isConnected() && barcodeDeviceConnected) {
 			// ChangeBeeperVolume(false);
 			WritableMap event = Arguments.createMap();
-			event.putString("RFIDStatusEvent", "connected");
+			event.putBoolean("ConnectionState", true);
+			event.putString("BatteryLevel", String.valueOf(batteryLevel));
+			// event.putString("RFIDStatusEvent", "connected");
 			this.dispatchEvent("RFIDStatusEvent", event);
 			try {
 				switchDPO(true);
@@ -594,6 +595,23 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		}
 	}
 
+	public void SaveCurrentRoute(String value) {
+		if (value != null) {
+			currentRoute = value.toLowerCase();
+			if (currentRoute.equals("register") || currentRoute.equals("lookup") || currentRoute.equals("audit")
+					|| currentRoute.equals("tagit")) {
+				ChangeBeeperVolume(false);
+				if (currentRoute.equals("tagit")) {
+					switchDPO(false);
+				}
+			}
+		} else {
+			ChangeBeeperVolume(true);
+			switchDPO(true);
+		}
+
+	}
+
 	public void SaveSelectedScanner(String scanner) {
 		selectedScanner = scanner;
 	}
@@ -693,6 +711,15 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		} else {
 			return false;
 		}
+	}
+
+	public boolean AttemptToReconnect() {
+		if (selectedScanner != null) {
+			init(this.context);
+			barcodeConnect();
+			return true;
+		}
+		return false;
 	}
 
 	// Turn on/off dynamic power management.
@@ -995,7 +1022,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					Antennas.AntennaRfConfig antennaRfConfig = this.rfidReaderDevice.getRFIDReader().Config.Antennas
 							.getAntennaRfConfig(1);
 					int index = Integer.parseInt(config.getString("antennaLevel"));
-					antennaRfConfig.setTransmitPowerIndex(index);
+					antennaRfConfig.setTransmitPowerIndex(index * 10);
 					this.rfidReaderDevice.getRFIDReader().Config.Antennas.setAntennaRfConfig(1, antennaRfConfig);
 					return "Antenna config changed to " + index;
 				} catch (InvalidUsageException e) {
@@ -1078,7 +1105,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 				if (myTags[index] != null && (myTags[index].getOpStatus() == null
 						|| myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS)) {
 					if (!isLocateMode) {
-						if (isTagITMode) {
+						if (currentRoute.equals("tagit")) {
 							this.cancel();
 							this.dispatchEvent("TagEvent", myTags[index].getTagID());
 							break;
@@ -1121,7 +1148,8 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 			Log.i("RFID", "batch mode event: " + rfidStatusEvents.StatusEventData.BatchModeEventData.toString());
 		} else if (statusEventType == STATUS_EVENT_TYPE.BATTERY_EVENT) {
 			int level = rfidStatusEvents.StatusEventData.BatteryData.getLevel();
-			event.putString("RFIDStatusEvent", "battery " + level);
+			batteryLevel = level;
+			// event.putString("RFIDStatusEvent", "battery " + level);
 			Log.i("RFID", "battery level " + level);
 		} else if (statusEventType == STATUS_EVENT_TYPE.HANDHELD_TRIGGER_EVENT) {
 			HANDHELD_TRIGGER_EVENT_TYPE eventData = rfidStatusEvents.StatusEventData.HandheldTriggerEventData

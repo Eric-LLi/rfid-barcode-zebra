@@ -15,12 +15,24 @@ export class RFIDScanner {
 			this.oncallbacks = [];
 			this.config = {};
 
-			DeviceEventEmitter.addListener('TagEvent', this.handleTagEvent.bind(this));
-			DeviceEventEmitter.addListener('TagsEvent', this.handleTagsEvent.bind(this));
-			DeviceEventEmitter.addListener('RFIDStatusEvent', this.handleStatusEvent.bind(this));
-			DeviceEventEmitter.addListener('writeTag', this.handleWriteTagEvent.bind(this));
-			DeviceEventEmitter.addListener('barcode', this.handlerBarcodeEvent.bind(this));
-			DeviceEventEmitter.addListener(
+			this.tagEvent = DeviceEventEmitter.addListener(
+				RFIDScannerEvent.TAG,
+				this.handleTagEvent.bind(this)
+			);
+			// DeviceEventEmitter.addListener('TagsEvent', this.handleTagsEvent.bind(this));
+			this.rfidStatusEvent = DeviceEventEmitter.addListener(
+				RFIDScannerEvent.RFID_Status,
+				this.handleStatusEvent.bind(this)
+			);
+			this.writeTagEvent = DeviceEventEmitter.addListener(
+				RFIDScannerEvent.WRITETAG,
+				this.handleWriteTagEvent.bind(this)
+			);
+			this.barcodeEvent = DeviceEventEmitter.addListener(
+				RFIDScannerEvent.BARCODE,
+				this.handlerBarcodeEvent.bind(this)
+			);
+			this.locateTagEvent = DeviceEventEmitter.addListener(
 				RFIDScannerEvent.LOCATE_TAG,
 				this.handlerLocateTagEvent.bind(this)
 			);
@@ -79,19 +91,19 @@ export class RFIDScanner {
 
 	handleStatusEvent(event) {
 		console.log(`RFID status event ${event.RFIDStatusEvent}`);
-		if (event.RFIDStatusEvent == 'connected') {
+		if (event.hasOwnProperty('ConnectionState')) {
 			if (this.oncallbacks.hasOwnProperty('RFIDStatusEvent')) {
 				this.oncallbacks.RFIDStatusEvent.forEach(callback => {
-					callback('Connected');
+					callback(event);
 				});
 			}
-		} else if (event.RFIDStatusEvent == 'opened') {
+		} else if (event.RFIDStatusEvent === 'opened') {
 			this.opened = true;
 			if (this.deferReading) {
 				rfidScannerManager.read(this.config);
 				this.deferReading = false;
 			}
-		} else if (event.RFIDStatusEvent == 'closed') {
+		} else if (event.RFIDStatusEvent === 'closed') {
 			this.opened = false;
 		} else if (event.RFIDStatusEvent.split(' ')[0] == 'battery') {
 			if (this.oncallbacks.hasOwnProperty('RFIDStatusEvent')) {
@@ -100,8 +112,8 @@ export class RFIDScanner {
 				});
 			}
 		} else if (
-			event.RFIDStatusEvent == 'inventoryStart' ||
-			event.RFIDStatusEvent == 'inventoryStop'
+			event.RFIDStatusEvent === 'inventoryStart' ||
+			event.RFIDStatusEvent === 'inventoryStop'
 		) {
 			if (this.oncallbacks.hasOwnProperty(RFIDScannerEvent.triggerAction)) {
 				this.oncallbacks[RFIDScannerEvent.triggerAction].forEach(callback => {
@@ -127,6 +139,14 @@ export class RFIDScanner {
 		}
 	}
 
+	RemoveAllListener = () => {
+		this.tagEvent.remove();
+		this.rfidStatusEvent.remove();
+		this.writeTagEvent.remove();
+		this.barcodeEvent.remove();
+		this.locateTagEvent.remove();
+	};
+
 	barcodePullTrigger() {
 		rfidScannerManager.barcodePullTrigger();
 	}
@@ -143,8 +163,8 @@ export class RFIDScanner {
 		rfidScannerManager.getConfig(callback);
 	}
 
-	saveAntennaConfig(config, callback) {
-		rfidScannerManager.saveAntennaConfig(config, callback);
+	SaveAntennaConfig(config) {
+		return rfidScannerManager.saveAntennaConfig(config);
 	}
 
 	saveTagID(value) {
@@ -167,13 +187,17 @@ export class RFIDScanner {
 		rfidScannerManager.TagITMode(value);
 	}
 
+	SaveCurrentRoute = value => {
+		return rfidScannerManager.SaveCurrentRoute(value);
+	};
+
 	TagITReadBarcode(value) {
-		rfidScannerManager.TagITReadBarcode(value);
+		return rfidScannerManager.TagITReadBarcode(value);
 	}
 
-	barcodeConnect() {
-		rfidScannerManager.barcodeConnect();
-	}
+	barcodeConnect = () => {
+		return rfidScannerManager.barcodeConnect();
+	};
 
 	switchDPO(value, callback) {
 		rfidScannerManager.switchDPO(value, callback);
@@ -183,18 +207,22 @@ export class RFIDScanner {
 		rfidScannerManager.cleanTags();
 	}
 
-	GetAvailableBluetoothDevices(callback) {
-		rfidScannerManager.GetAvailableBluetoothDevices(callback);
-	}
+	GetAvailableBluetoothDevices = () => {
+		return rfidScannerManager.GetAvailableBluetoothDevices();
+	};
 
-	init() {
+	InitialThread = () => {
+		return rfidScannerManager.InitialThread();
+	};
+
+	init = () => {
 		// this.oncallbacks = [];
-		rfidScannerManager.init();
-	}
+		return rfidScannerManager.init();
+	};
 
-	SaveSelectedScanner(item) {
+	SaveSelectedScanner = item => {
 		rfidScannerManager.SaveSelectedScanner(item);
-	}
+	};
 
 	read(config = {}) {
 		this.config = config;
@@ -214,13 +242,17 @@ export class RFIDScanner {
 		rfidScannerManager.cancel();
 	}
 
-	writeTag(targetTag, newTag, callback) {
-		rfidScannerManager.writeTag(targetTag, newTag, callback);
+	AttemptToReconnect = () => {
+		return rfidScannerManager.AttemptToReconnect();
+	};
+
+	writeTag(targetTag, newTag) {
+		return rfidScannerManager.writeTag(targetTag, newTag);
 	}
 
-	isConnected(callback) {
-		rfidScannerManager.isConnected(callback);
-	}
+	isConnected = () => {
+		return rfidScannerManager.isConnected();
+	};
 
 	barcodeDisconnect() {
 		rfidScannerManager.barcodeDisconnect();
@@ -230,13 +262,14 @@ export class RFIDScanner {
 		rfidScannerManager.shutdown();
 	}
 
-	ChangeBeeperVolume(value){
+	ChangeBeeperVolume(value) {
 		rfidScannerManager.ChangeBeeperVolume(value);
 	}
+
 	OpenAndroidSetting = () => {
 		rfidScannerManager.OpenAndroidSetting();
 	};
-	
+
 	on(event, callback) {
 		// if (!this.oncallbacks[event]) {
 		// 	this.oncallbacks[event] = [];
