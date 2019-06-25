@@ -1,6 +1,6 @@
 import { NativeModules, DeviceEventEmitter } from 'react-native';
-import { RFIDScannerEvent } from './RFIDScannerEvent';
 import _ from 'lodash';
+import { RFIDScannerEvent } from './RFIDScannerEvent';
 
 const rfidScannerManager = NativeModules.RNRfidBarcodeZebra;
 
@@ -222,6 +222,10 @@ export class RFIDScanner {
 
 	SaveSelectedScanner = item => {
 		rfidScannerManager.SaveSelectedScanner(item);
+	};
+
+	GetConnectedReader = () => {
+		return rfidScannerManager.GetConnectedReader();
 	};
 
 	read(config = {}) {

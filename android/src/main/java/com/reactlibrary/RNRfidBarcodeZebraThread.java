@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.lang.NullPointerException;
 import java.util.HashMap;
 
+import com.facebook.react.bridge.Promise;
 import com.zebra.rfid.api3.*;
 import com.zebra.scannercontrol.*;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -16,11 +17,6 @@ import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.bridge.Promise;
-import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.modules.core.DeviceEventManagerModule;
-import com.facebook.react.bridge.LifecycleEventListener;
 
 import static com.facebook.react.bridge.UiThreadUtil.runOnUiThread;
 
@@ -158,7 +154,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	}
 
 	// Using barcode library to connect RFID scanner.
-	public void barcodeConnect() {
+	public void barcodeConnect() throws Exception {
 		if (barcodeDeviceConnected) {
 			barcodeDisconnect();
 		}
@@ -221,20 +217,18 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 				} catch (Exception e) {
 					event.putString("error", e.getMessage());
 					dispatchEvent("barcodeError", event);
+					throw e;
 				}
 			} else {
 				event.putString("error", "DCSSDK_RESULT_SCANNER_NOT_AVAILABLE");
 				dispatchEvent("barcodeError", event);
+				throw new Exception("Barcode scanner not available");
 			}
 		} else {
 			event.putString("error", "DCSSDK_RESULT_SCANNER_ALREADY_ACTIVE");
 			dispatchEvent("barcodeError", event);
+			throw new Exception("Barcode scanner already connected");
 		}
-		// else {
-		// event.putString("error", " DCSSDK_RESULT_FAILURE");
-		// dispatchEvent("barcodeError", event);
-		// }
-		// return false;
 	}
 
 	// Trigger barcode read.
@@ -338,7 +332,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		return availableRFIDReaderList;
 	}
 
-	private void connect() {
+	private void connect() throws Exception {
 		String err = null;
 		if (this.rfidReaderDevice != null) {
 			if (rfidReaderDevice.getRFIDReader().isConnected())
@@ -357,8 +351,10 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 
 			} catch (InvalidUsageException e) {
 				Log.e("RFID", "Init scanner error - invalid message: " + e.getMessage());
+				throw e;
 			} catch (NullPointerException ex) {
 				Log.e("RFID", "Blue tooth not support on device");
+				throw ex;
 			}
 
 			int listSize = (availableRFIDReaderList == null) ? 0 : availableRFIDReaderList.size();
@@ -374,6 +370,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					}
 				}
 
+				selectedScanner = null;
 				ReaderDevice readerDevice = availableRFIDReaderList.get(index);
 				RFIDReader rfidReader = readerDevice.getRFIDReader();
 				// Connect to RFID reader
@@ -449,6 +446,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 				if (err == null) {
 					// Connect success
 					rfidReaderDevice = readerDevice;
+					selectedScanner = rfidReaderDevice.getName();
 					tempDisconnected = false;
 					WritableMap event = Arguments.createMap();
 					event.putString("RFIDStatusEvent", "opened");
@@ -464,6 +462,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		}
 		if (err != null) {
 			Log.e("RFID", err);
+			throw new Exception(err);
 		}
 	}
 
@@ -486,6 +485,8 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 				Log.i("Connection", e.getInfo());
 			} catch (OperationFailureException e) {
 				Log.i("Connection", e.getVendorMessage());
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
 		}
 	}
@@ -563,7 +564,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		}
 	}
 
-	public void reconnect() {
+	public void reconnect() throws Exception {
 		if (this.rfidReaderDevice != null) {
 			if (tempDisconnected) {
 				RFIDReader rfidReader = this.rfidReaderDevice.getRFIDReader();
@@ -614,14 +615,20 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 			ChangeBeeperVolume(true);
 			switchDPO(true);
 		}
-
 	}
 
 	public void SaveSelectedScanner(String scanner) {
 		selectedScanner = scanner;
 	}
 
-	public void init(Context context) {
+	public String GetConnectedReader() {
+		if (selectedScanner != null)
+			return selectedScanner;
+		else
+			return null;
+	}
+
+	public void init(Context context) throws Exception {
 		// Register receiver
 		Log.v("RFID", "init");
 		readers = new Readers(context, ENUM_TRANSPORT.BLUETOOTH);
@@ -633,8 +640,10 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 			Log.v("RFID", "Scanner thread initialized");
 		} catch (InvalidUsageException e) {
 			Log.e("RFID", "Init scanner error - invalid message: " + e.getMessage());
+			throw e;
 		} catch (NullPointerException ex) {
 			Log.e("RFID", "Blue tooth not support on device");
+			throw ex;
 		}
 		tempDisconnected = false;
 		reading = false;
@@ -718,7 +727,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		}
 	}
 
-	public boolean AttemptToReconnect() {
+	public boolean AttemptToReconnect() throws Exception {
 		if (selectedScanner != null) {
 			init(this.context);
 			barcodeConnect();
@@ -887,19 +896,30 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 									} else {
 										dispatchEvent("writeTag", "success");
 									}
-
 								}
 							}.execute();
 						} else {
+							WritableMap event = Arguments.createMap();
+							event.putString("error", "Tag# cannot be empty");
+							dispatchEvent("writeTag", event);
 							return "Both RFID Tag# cannot be empty.";
 						}
 					} catch (Exception e) {
+						WritableMap event = Arguments.createMap();
+						event.putString("error", e.getMessage());
+						dispatchEvent("writeTag", event);
 						return "Error: " + e.getMessage();
 					}
 				} else {
+					WritableMap event = Arguments.createMap();
+					event.putString("error", "Reader capabilities not updated");
+					dispatchEvent("writeTag", event);
 					return "Reader capabilities not updated";
 				}
 			} else {
+				WritableMap event = Arguments.createMap();
+				event.putString("error", "No Active Connection with Reader");
+				dispatchEvent("writeTag", event);
 				return "No Active Connection with Reader";
 			}
 		}
@@ -1016,10 +1036,11 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		return event;
 	}
 
-	public String saveAntennaConfig(ReadableMap config) {
+	public boolean saveAntennaConfig(ReadableMap config) throws Exception {
 		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
 			if (config == null) {
-				return "Config cannot be empty";
+				throw new Exception("Config cannot be empty");
+				// return "Config cannot be empty";
 			}
 
 			if (config.hasKey("antennaLevel")) {
@@ -1029,13 +1050,17 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					int index = Integer.parseInt(config.getString("antennaLevel"));
 					antennaRfConfig.setTransmitPowerIndex(index * 10);
 					this.rfidReaderDevice.getRFIDReader().Config.Antennas.setAntennaRfConfig(1, antennaRfConfig);
-					return "Antenna config changed to " + index;
+					// return "Antenna config changed to " + index;
+					// return true;
 				} catch (InvalidUsageException e) {
-					return e.getInfo();
+					throw e;
+					// return e.getInfo();
 				} catch (OperationFailureException e) {
-					return e.getVendorMessage();
+					throw e;
+					// return e.getVendorMessage();
 				} catch (NumberFormatException e) {
-					return e.getMessage();
+					throw e;
+					// return e.getMessage();
 				}
 			}
 			if (config.hasKey("singulationControl")) {
@@ -1046,13 +1071,18 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					singulationControl.setTagPopulation((short) 600);
 					rfidReaderDevice.getRFIDReader().Config.Antennas.setSingulationControl(1, singulationControl);
 				} catch (InvalidUsageException e) {
-					Log.i("SingulationControl", e.getMessage());
+					throw e;
+					// Log.i("SingulationControl", e.getMessage());
 				} catch (OperationFailureException e) {
-					Log.i("SingulationControl", e.getMessage());
+					throw e;
+					// Log.i("SingulationControl", e.getMessage());
 				}
 			}
+			return true;
+		} else {
+			throw new Exception("No Active Connection with Reader");
 		}
-		return "No Active Connection with Reader";
+		// return "No Active Connection with Reader";
 	}
 
 	@Override
