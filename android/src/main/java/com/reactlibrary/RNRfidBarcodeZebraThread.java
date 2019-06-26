@@ -28,7 +28,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	private Readers readers = null;
 	private ArrayList<ReaderDevice> deviceList = null;
 	private ReaderDevice rfidReaderDevice = null;
-	boolean tempDisconnected = false;
+	private boolean tempDisconnected = false;
 	private Boolean reading = false;
 	private ReadableMap config = null;
 	private ArrayList<String> scannedTags = new ArrayList<>();
@@ -51,9 +51,9 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	private boolean isAuditMode = false;
 
 	// Instance of SDK Handler, Barcode
-	public static SDKHandler sdkHandler;
-	ArrayList<DCSScannerInfo> scannerAvailableList = new ArrayList<>();
-	boolean barcodeDeviceConnected = false;
+	private static SDKHandler sdkHandler;
+	private ArrayList<DCSScannerInfo> scannerAvailableList = new ArrayList<>();
+	private boolean barcodeDeviceConnected = false;
 	private int BarcodeScannerID = 0;
 
 	public RNRfidBarcodeZebraThread(ReactApplicationContext context) {
@@ -188,9 +188,10 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 			for (DCSScannerInfo s : scannerTreeList) {
 				scannerAvailableList.add(s);
 				if (s.getAuxiliaryScanners() != null) {
-					for (DCSScannerInfo aux : s.getAuxiliaryScanners().values()) {
-						scannerAvailableList.add(aux);
-					}
+					scannerAvailableList.addAll(s.getAuxiliaryScanners().values());
+					// for (DCSScannerInfo aux : s.getAuxiliaryScanners().values()) {
+					// scannerAvailableList.add(aux);
+					// }
 				}
 			}
 		}
@@ -370,7 +371,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					}
 				}
 
-				selectedScanner = null;
 				ReaderDevice readerDevice = availableRFIDReaderList.get(index);
 				RFIDReader rfidReader = readerDevice.getRFIDReader();
 				// Connect to RFID reader

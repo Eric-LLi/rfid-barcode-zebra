@@ -15,27 +15,7 @@ export class RFIDScanner {
 			this.oncallbacks = [];
 			this.config = {};
 
-			this.tagEvent = DeviceEventEmitter.addListener(
-				RFIDScannerEvent.TAG,
-				this.handleTagEvent.bind(this)
-			);
-			// DeviceEventEmitter.addListener('TagsEvent', this.handleTagsEvent.bind(this));
-			this.rfidStatusEvent = DeviceEventEmitter.addListener(
-				RFIDScannerEvent.RFID_Status,
-				this.handleStatusEvent.bind(this)
-			);
-			this.writeTagEvent = DeviceEventEmitter.addListener(
-				RFIDScannerEvent.WRITETAG,
-				this.handleWriteTagEvent.bind(this)
-			);
-			this.barcodeEvent = DeviceEventEmitter.addListener(
-				RFIDScannerEvent.BARCODE,
-				this.handlerBarcodeEvent.bind(this)
-			);
-			this.locateTagEvent = DeviceEventEmitter.addListener(
-				RFIDScannerEvent.LOCATE_TAG,
-				this.handlerLocateTagEvent.bind(this)
-			);
+			this.ActiveAllListener();
 		}
 	}
 
@@ -145,6 +125,30 @@ export class RFIDScanner {
 		this.writeTagEvent.remove();
 		this.barcodeEvent.remove();
 		this.locateTagEvent.remove();
+	};
+
+	ActiveAllListener = () => {
+		this.tagEvent = DeviceEventEmitter.addListener(
+			RFIDScannerEvent.TAG,
+			this.handleTagEvent.bind(this)
+		);
+		// DeviceEventEmitter.addListener('TagsEvent', this.handleTagsEvent.bind(this));
+		this.rfidStatusEvent = DeviceEventEmitter.addListener(
+			RFIDScannerEvent.RFID_Status,
+			this.handleStatusEvent.bind(this)
+		);
+		this.writeTagEvent = DeviceEventEmitter.addListener(
+			RFIDScannerEvent.WRITETAG,
+			this.handleWriteTagEvent.bind(this)
+		);
+		this.barcodeEvent = DeviceEventEmitter.addListener(
+			RFIDScannerEvent.BARCODE,
+			this.handlerBarcodeEvent.bind(this)
+		);
+		this.locateTagEvent = DeviceEventEmitter.addListener(
+			RFIDScannerEvent.LOCATE_TAG,
+			this.handlerLocateTagEvent.bind(this)
+		);
 	};
 
 	barcodePullTrigger() {
