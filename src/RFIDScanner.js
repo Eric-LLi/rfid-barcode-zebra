@@ -119,11 +119,26 @@ export class RFIDScanner {
 	}
 
 	RemoveAllListener = () => {
-		if (!_.isEmpty(this.tagEvent)) this.tagEvent.remove();
-		if (!_.isEmpty(this.rfidStatusEvent)) this.rfidStatusEvent.remove();
-		if (!_.isEmpty(this.writeTagEvent)) this.writeTagEvent.remove();
-		if (!_.isEmpty(this.barcodeEvent)) this.barcodeEvent.remove();
-		if (!_.isEmpty(this.locateTagEvent)) this.locateTagEvent.remove();
+		if (!_.isEmpty(this.tagEvent)) {
+			this.tagEvent.remove();
+			this.tagEvent = null;
+		}
+		if (!_.isEmpty(this.rfidStatusEvent)) {
+			this.rfidStatusEvent.remove();
+			this.rfidStatusEvent = null;
+		}
+		if (!_.isEmpty(this.writeTagEvent)) {
+			this.writeTagEvent.remove();
+			this.writeTagEvent = null;
+		}
+		if (!_.isEmpty(this.barcodeEvent)) {
+			this.barcodeEvent.remove();
+			this.barcodeEvent = null;
+		}
+		if (!_.isEmpty(this.locateTagEvent)) {
+			this.locateTagEvent.remove();
+			this.locateTagEvent = null;
+		}
 	};
 
 	ActiveAllListener = () => {
@@ -219,7 +234,7 @@ export class RFIDScanner {
 	};
 
 	InitialThread = () => {
-		return rfidScannerManager.InitialThread();
+		rfidScannerManager.InitialThread();
 	};
 
 	init = () => {
