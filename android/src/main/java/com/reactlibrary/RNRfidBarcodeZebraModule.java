@@ -26,8 +26,9 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 		this.reactContext = reactContext;
 		this.reactContext.addLifecycleEventListener(this);
 
-		InitialThread();
-
+		if (this.scannerthread == null) {
+			InitialThread();
+		}
 		Log.v("RFID", "RFIDScannerManager created");
 	}
 
@@ -66,6 +67,9 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 
 	@ReactMethod
 	public void InitialThread() {
+		if (this.scannerthread != null) {
+			this.scannerthread.interrupt();
+		}
 		this.scannerthread = new RNRfidBarcodeZebraThread(this.reactContext) {
 
 			@Override
@@ -86,7 +90,9 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
 			}
 		};
+
 		scannerthread.start();
+
 	}
 
 	@ReactMethod

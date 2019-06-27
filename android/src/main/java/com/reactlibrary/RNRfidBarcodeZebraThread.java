@@ -58,41 +58,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 
 	public RNRfidBarcodeZebraThread(ReactApplicationContext context) {
 		this.context = context;
-		// //Declare barcode library.
-		// sdkHandler = new SDKHandler(context);
-		// //In order to receive event.
-		// sdkHandler.dcssdkSetDelegate(this);
-		// //Setup operation mode.
-		// sdkHandler.dcssdkSetOperationalMode(DCSSDKDefs.DCSSDK_MODE.DCSSDK_OPMODE_BT_NORMAL);
-		// //Enable auto detect available devices.
-		// sdkHandler.dcssdkEnableAvailableScannersDetection(true);
-		//
-		// //Barcode library register listener.
-		// int notifications_mask = 0;
-		// notifications_mask |=
-		// (DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_APPEARANCE.value |
-		// DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_DISAPPEARANCE.value);
-		// notifications_mask |=
-		// (DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_ESTABLISHMENT.value |
-		// DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_TERMINATION.value);
-		// notifications_mask |= (DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_BARCODE.value);
-		// sdkHandler.dcssdkSubsribeForEvents(notifications_mask);
-		//
-		// //Get available devices list.
-		// ArrayList<DCSScannerInfo> scannerTreeList = new ArrayList<>();
-		// sdkHandler.dcssdkGetAvailableScannersList(scannerTreeList);
-		// sdkHandler.dcssdkGetActiveScannersList(scannerTreeList);
-		//
-		// for (DCSScannerInfo s :
-		// scannerTreeList) {
-		// scannerAvailableList.add(s);
-		// if (s.getAuxiliaryScanners() != null) {
-		// for (DCSScannerInfo aux :
-		// s.getAuxiliaryScanners().values()) {
-		// scannerAvailableList.add(aux);
-		// }
-		// }
-		// }
 	}
 
 	public void run() {
@@ -334,6 +299,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	}
 
 	private void connect() throws Exception {
+		System.out.println(Thread.currentThread());
 		String err = null;
 		if (this.rfidReaderDevice != null) {
 			if (rfidReaderDevice.getRFIDReader().isConnected())
