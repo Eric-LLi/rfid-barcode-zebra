@@ -67,32 +67,37 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 
 	@ReactMethod
 	public void InitialThread() {
-		if (this.scannerthread != null) {
-			this.scannerthread.interrupt();
+		try {
+			if (this.scannerthread != null) {
+				this.scannerthread.interrupt();
+			}
+			this.scannerthread = new RNRfidBarcodeZebraThread(this.reactContext) {
+
+				@Override
+				public void dispatchEvent(String name, WritableMap data) {
+					RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				}
+
+				@Override
+				public void dispatchEvent(String name, String data) {
+					RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				}
+
+				@Override
+				public void dispatchEvent(String name, WritableArray data) {
+					RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				}
+
+				@Override
+				public void dispatchEvent(String name, boolean data) {
+					RNRfidBarcodeZebraModule.this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
+				}
+			};
+
+			scannerthread.start();
+		} catch (Exception err) {
+			Log.e("Error", err.getMessage());
 		}
-		this.scannerthread = new RNRfidBarcodeZebraThread(this.reactContext) {
-
-			@Override
-			public void dispatchEvent(String name, WritableMap data) {
-				RNRfidBarcodeZebraModule.this.reactContext
-						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
-			}
-
-			@Override
-			public void dispatchEvent(String name, String data) {
-				RNRfidBarcodeZebraModule.this.reactContext
-						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
-			}
-
-			@Override
-			public void dispatchEvent(String name, WritableArray data) {
-				RNRfidBarcodeZebraModule.this.reactContext
-						.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
-			}
-		};
-
-		scannerthread.start();
-
 	}
 
 	@ReactMethod
@@ -119,12 +124,11 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 		try {
 			if (this.scannerthread != null) {
 				this.scannerthread.init(reactContext);
-				promise.resolve("");
+				promise.resolve(true);
 			}
 		} catch (Exception err) {
 			promise.reject(err);
 		}
-
 	}
 
 	@ReactMethod
@@ -150,13 +154,11 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	public void barcodeConnect(Promise promise) {
 		try {
 			if (this.scannerthread != null) {
-				this.scannerthread.barcodeConnect();
-				promise.resolve("barcodeConnect");
+				promise.resolve(this.scannerthread.barcodeConnect());
 			}
 		} catch (Exception err) {
 			promise.reject(err);
 		}
-
 	}
 
 	@ReactMethod

@@ -169,6 +169,10 @@ export class RFIDScanner {
 			);
 	};
 
+	InitThread = () => {
+		rfidScannerManager.InitialThread();
+	};
+
 	barcodePullTrigger() {
 		rfidScannerManager.barcodePullTrigger();
 	}
