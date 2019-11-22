@@ -742,7 +742,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
 			if (this.rfidReaderDevice.getRFIDReader().isCapabilitiesReceived()) {
 				if (!isLocatingTag) {
-					if (!tagID.isEmpty()) {
+					if (tagID != null) {
 
 						new AsyncTask<Void, Void, Boolean>() {
 							private InvalidUsageException invalidUsageException;
@@ -820,7 +820,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 			if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
 				if (this.rfidReaderDevice.getRFIDReader().isCapabilitiesReceived()) {
 					try {
-						if (!targetTag.isEmpty() && !newTag.isEmpty()) {
+						if (targetTag != null && newTag != null) {
 							isProgrammingTag = true;
 							TagAccess tagAccess = new TagAccess();
 							final TagAccess.WriteAccessParams writeAccessParams = tagAccess.new WriteAccessParams();
@@ -1065,35 +1065,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (rfidReaderDevice == null)
 			return;
 		RFIDReader rfidReader = rfidReaderDevice.getRFIDReader();
-		// final TagData[] tagArray = rfidReader.Actions.getReadTags(100);
-		// TagDataArray tagArray = rfidReader.Actions.getReadTagsEx(100);
-		// if (tagArray != null) {
-		//// WritableArray rfidTags = Arguments.createArray();
-		// for (int i = 0; i < tagArray.getLength(); i++) {
-		// TagData tag = tagArray.getTags()[i];
-		// if (tag.isContainsLocationInfo()) {
-		// WritableMap event = Arguments.createMap();
-		// short tagProximityPercent = tag.LocationInfo.getRelativeDistance();
-		// event.putInt("distance", tagProximityPercent);
-		// dispatchEvent("locateTag", event);
-		// }
-		// Log.i("RFID", "Tag ID = " + tag.getTagID());
-		// if (tag.getOpCode() == null) {
-		// Log.w("RFID", "null opcode");
-		// } else {
-		// Log.w("RFID", "opcode " + tag.getOpCode().toString());
-		// }
-		// if (!isLocateMode) {
-		// if (isTagITMode) {
-		// this.cancel();
-		// }
-		// this.dispatchEvent("TagEvent", tag.getTagID());
-		//// rfidTags.pushString(tag.getTagID());
-		//// this.dispatchEvent("TagsEvent", rfidTags);
-		// }
-		// }
-		//
-		// }
+
 		final TagData[] myTags = rfidReader.Actions.getReadTags(100);
 		if (myTags != null) {
 			for (int index = 0; index < myTags.length; index++) {
@@ -1113,22 +1085,28 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 				}
 				if (myTags[index] != null && (myTags[index].getOpStatus() == null
 						|| myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS)) {
+					String EPC = myTags[index].getTagID();
 					if (!isLocateMode) {
-						if (currentRoute.equals("tagit")) {
+						if (currentRoute != null && currentRoute.equals("tagit")) {
 							this.cancel();
-							this.dispatchEvent("TagEvent", myTags[index].getTagID());
-							break;
-						} else {
-							boolean result = false;
-							for (int i = 0; i < scannedTags.size(); i++) {
-								if (scannedTags.get(i).equals(myTags[index].getTagID())) {
-									result = true;
-									break;
-								}
+							if (scannedTags.size() == 0) {
+								boolean result = addTagToList(EPC);
+//								this.dispatchEvent("TagEvent", myTags[index].getTagID());
+								this.dispatchEvent("TagEvent", scannedTags.get(0));
 							}
-							if (!result) {
-								scannedTags.add(myTags[index].getTagID());
-								this.dispatchEvent("TagEvent", myTags[index].getTagID());
+							return;
+//							break;
+						} else {
+							boolean result = addTagToList(EPC);
+//							for (int i = 0; i < scannedTags.size(); i++) {
+//								if (scannedTags.get(i).equals(myTags[index].getTagID())) {
+//									result = true;
+//									break;
+//								}
+//							}
+							if (result) {
+//								scannedTags.add(EPC);
+								this.dispatchEvent("TagEvent", EPC);
 							}
 						}
 					}
@@ -1192,7 +1170,10 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 				} else {
 					this.cancel();
 					rfidReaderDevice.getRFIDReader().Actions.purgeTags();
-					// cleanTags();
+					if (currentRoute != null && currentRoute.equals("tagit")) {
+						scannedTags = new ArrayList<>();
+					}
+
 					if (isTagITMode || isAuditMode) {
 
 					}
@@ -1202,5 +1183,25 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		if (event.hasKey("RFIDStatusEvent")) {
 			this.dispatchEvent("RFIDStatusEvent", event);
 		}
+	}
+
+	private boolean addTagToList(String strEPC) {
+		if (strEPC != null) {
+			if (!checkIsExisted(strEPC)) {
+				scannedTags.add(strEPC);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean checkIsExisted(String strEPC) {
+		for (int i = 0; i < scannedTags.size(); i++) {
+			String tag = scannedTags.get(i);
+			if (strEPC != null && strEPC.equals(tag)) {
+				return true;
+			}
+		}
+		return false;
 	}
 }
