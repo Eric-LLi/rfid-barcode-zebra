@@ -1088,9 +1088,10 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					String EPC = myTags[index].getTagID();
 					if (!isLocateMode) {
 						if (currentRoute != null && currentRoute.equals("tagit")) {
-							this.cancel();
-							if (scannedTags.size() == 0) {
-								boolean result = addTagToList(EPC);
+//							this.cancel();
+							addTagToList(EPC);
+							if (scannedTags.size() == 1) {
+//								boolean result = addTagToList(EPC);
 //								this.dispatchEvent("TagEvent", myTags[index].getTagID());
 								this.dispatchEvent("TagEvent", scannedTags.get(0));
 							}
