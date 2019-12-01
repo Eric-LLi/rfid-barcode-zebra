@@ -93,10 +93,11 @@ export class RFIDScanner {
 		}
 	}
 
-	handleTagsEvent(tags) {
-		if (this.oncallbacks.hasOwnProperty(RFIDScannerEvent.TAGS)) {
-			this.oncallbacks[RFIDScannerEvent.TAGS].forEach(callback => {
-				callback(tags);
+	handleErrorEvent = (event) => {
+		console.warn(event);
+		if (this.oncallbacks.hasOwnProperty(RFIDScannerEvent.HANDLE_ERROR)) {
+			this.oncallbacks[RFIDScannerEvent.HANDLE_ERROR].forEach(callback => {
+				callback(event);
 			});
 		}
 	}
@@ -122,9 +123,18 @@ export class RFIDScanner {
 			this.locateTagEvent.remove();
 			this.locateTagEvent = null;
 		}
+		if(!_.isEmpty(this.errorEvent)){
+			this.errorEvent.remove();
+			this.errorEvent = null;
+		}
 	};
 
 	ActiveAllListener = () => {
+		if(_.isEmpty(this.errorEvent)){
+			this.errorEvent = DeviceEventEmitter.addListener(
+				RFIDScannerEvent.HANDLE_ERROR, this.handleErrorEvent
+			);
+		}
 		if (_.isEmpty(this.tagEvent))
 			this.tagEvent = DeviceEventEmitter.addListener(
 				RFIDScannerEvent.TAG,
@@ -166,10 +176,6 @@ export class RFIDScanner {
 
 	locateMode(value) {
 		rfidScannerManager.locateMode(value);
-	}
-
-	locateTag(tag) {
-		rfidScannerManager.locateTag(tag);
 	}
 
 	SaveCurrentRoute = value => {

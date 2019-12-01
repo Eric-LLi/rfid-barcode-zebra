@@ -212,13 +212,6 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void locateTag(String tag) {
-		if (this.scannerthread != null) {
-			this.scannerthread.LoopForLocateTag();
-		}
-	}
-
-	@ReactMethod
 	public void writeTag(String targetTag, String newTag, Promise promise) {
 		try {
 			if (this.scannerthread != null) {

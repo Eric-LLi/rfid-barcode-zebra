@@ -5,6 +5,7 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.lang.NullPointerException;
+import java.util.Objects;
 
 import com.zebra.rfid.api3.*;
 import com.zebra.scannercontrol.*;
@@ -39,7 +40,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	// Locate Tag
 	private static boolean isLocatingTag = false;
 	private static boolean isLocateMode = false;
-	private static String tagID = "";
+	private static String tagID = null;
 
 	// Tag IT
 	private static boolean isReadBarcode = false;
@@ -332,7 +333,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 									err = "Region not found";
 								}
 							} catch (OperationFailureException ex1) {
-								err = "Error setting RFID region: " + ex1.getMessage();
+								throw new Exception(ex1.getVendorMessage());
 							}
 						} else if (e.getResults() == RFIDResults.RFID_CONNECTION_PASSWORD_ERROR) {
 							// Password error
@@ -344,9 +345,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 							err = e.getResults().toString();
 						}
 					} catch (InvalidUsageException e) {
-						throw new Exception(e.getMessage());
-					} catch (Exception e) {
-						throw e;
+						throw new Exception(e.getVendorMessage());
 					}
 
 				} else {
@@ -366,7 +365,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 			}
 
 		} catch (InvalidUsageException e) {
-			err = "connect: invalid usage error: " + e.getMessage();
 			throw new Exception("connect: invalid usage error: " + e.getMessage());
 		}
 	}
@@ -469,9 +467,9 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 					isReadBarcode = false;
 					isProgrammingTag = false;
 				} catch (InvalidUsageException e) {
-					err = e.getMessage();
+					err = e.getVendorMessage();
 				} catch (OperationFailureException e) {
-					err = e.getMessage();
+					err = e.getVendorMessage();
 				} catch (Exception e) {
 					err = e.getMessage();
 				}
@@ -508,10 +506,12 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 
 		if (currentRoute != null && currentRoute.equalsIgnoreCase("tagit")) {
 			enableDPO(false);
-		} else if (currentRoute != null && currentRoute.equalsIgnoreCase("locatetag")) {
+		} else if (currentRoute != null && currentRoute.equalsIgnoreCase("locateTag")) {
+			isLocateMode = true;
 			enableBeeper(true);
 		} else {
-			//
+			enableDPO(true);
+			enableBeeper(false);
 		}
 	}
 
@@ -527,58 +527,48 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		}
 	}
 
-	public void read() throws Exception {
+	private void read() throws Exception {
 		if (reading) {
-			Log.e("RFID", "already reading");
 			throw new Exception("Already reading");
 		}
-		String err = null;
 		if (reader != null) {
 			if (!reader.isConnected()) {
-				err = "read: device not connected";
+				throw new Exception("device is not connected");
 			} else {
 				try {
 					// Perform inventory
 					reader.Actions.Inventory.perform();
 					reading = true;
 				} catch (InvalidUsageException e) {
-					err = "read: invalid usage error on scanner read: " + e.getMessage();
-				} catch (OperationFailureException ex) {
-					err = "read: error setting up scanner read: " + ex.getResults().toString();
+					throw new Exception(e.getVendorMessage());
+				} catch (OperationFailureException e) {
+					throw new Exception(e.getVendorMessage());
 				}
 			}
 		} else {
-			err = "read: device not initialised";
-		}
-		if (err != null) {
-			Log.e("RFID", err);
-			throw new Exception(err);
+			throw new Exception("device not initialised");
 		}
 	}
 
-	public void cancel() throws Exception {
-		String err = null;
+	private void cancel() throws Exception {
 		if (reader != null) {
 			if (!reader.isConnected()) {
-				err = "cancel: device not connected";
+				throw new Exception("device is not connected");
 			} else {
 				if (reading) {
 					try {
 						// Stop inventory
 						reader.Actions.Inventory.stop();
 					} catch (InvalidUsageException e) {
-						err = "cancel: invalid usage error on scanner read: " + e.getMessage();
-					} catch (OperationFailureException ex) {
-						err = "cancel: error setting up scanner read: " + ex.getResults().toString();
+						throw new Exception(e.getVendorMessage());
+					} catch (OperationFailureException e) {
+						throw new Exception(e.getVendorMessage());
 					}
 					reading = false;
 				}
 			}
 		} else {
-			err = "cancel: device not initialised";
-		}
-		if (err != null) {
-			throw new Exception(err);
+			throw new Exception("device is not initialised");
 		}
 	}
 
@@ -602,7 +592,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 
 	// Turn on/off dynamic power management.
 	private void enableDPO(boolean value) throws Exception {
-		String err = null;
 		if (reader != null && reader.isConnected()) {
 			try {
 				if (value) {
@@ -611,103 +600,100 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 					reader.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.DISABLE);
 				}
 			} catch (InvalidUsageException e) {
-				err = e.getInfo();
+				throw new Exception(e.getVendorMessage());
 			} catch (OperationFailureException e) {
-				err = e.getVendorMessage();
+				throw new Exception(e.getVendorMessage());
 			}
-		}
-		if (err != null) {
-			throw new Exception(err);
 		}
 	}
 
 	// Keep locating tag
-	public void LoopForLocateTag() {
-		runOnUiThread(new Runnable() {
-			@Override
-			public void run() {
-				LocateTag();
-			}
-		});
-	}
+//	public void LoopForLocateTag() {
+//		runOnUiThread(new Runnable() {
+//			@Override
+//			public void run() {
+//				LocateTag();
+//			}
+//		});
+//	}
 
 	// Locate tag
-	public void LocateTag() {
-		WritableMap event = Arguments.createMap();
-		if (reader != null && reader.isConnected()) {
-			if (reader.isCapabilitiesReceived()) {
-				if (!isLocatingTag) {
-					if (tagID != null) {
-
-						new AsyncTask<Void, Void, Boolean>() {
-							private InvalidUsageException invalidUsageException;
-							private OperationFailureException operationFailureException;
-
-							@Override
-							protected Boolean doInBackground(Void... voids) {
-								try {
-									reader.Actions.TagLocationing.Perform(tagID, null, null);
-								} catch (InvalidUsageException e) {
-									invalidUsageException = e;
-								} catch (OperationFailureException e) {
-									operationFailureException = e;
-								}
-								return null;
-							}
-
-							@Override
-							protected void onPostExecute(Boolean result) {
-								isLocatingTag = true;
-								WritableMap event = Arguments.createMap();
-								if (invalidUsageException != null) {
-									event.putString("error", invalidUsageException.getInfo());
-								} else if (operationFailureException != null) {
-									event.putString("error", operationFailureException.getVendorMessage());
-								}
-								dispatchEvent("locateTag", event);
-							}
-						}.execute();
-					}
-				} else {
-					new AsyncTask<Void, Void, Boolean>() {
-						private InvalidUsageException invalidUsageException;
-						private OperationFailureException operationFailureException;
-
-						@Override
-						protected Boolean doInBackground(Void... voids) {
-							isLocatingTag = false;
-							try {
-								reader.Actions.TagLocationing.Stop();
-							} catch (InvalidUsageException e) {
-								invalidUsageException = e;
-							} catch (OperationFailureException e) {
-								operationFailureException = e;
-							}
-							return null;
-						}
-
-						@Override
-						protected void onPostExecute(Boolean result) {
-
-							WritableMap event = Arguments.createMap();
-							if (invalidUsageException != null) {
-								event.putString("error", invalidUsageException.getInfo());
-							} else if (operationFailureException != null) {
-								event.putString("error", operationFailureException.getVendorMessage());
-							}
-							dispatchEvent("locateTag", event);
-						}
-					}.execute();
-				}
-			} else {
-				event.putString("error", "Reader capabilities not updated");
-				dispatchEvent("locateTag", event);
-			}
-		} else {
-			event.putString("error", "No Active Connection with Reader");
-			dispatchEvent("locateTag", event);
-		}
-	}
+//	public void LocateTag() {
+//		WritableMap event = Arguments.createMap();
+//		if (reader != null && reader.isConnected()) {
+//			if (reader.isCapabilitiesReceived()) {
+//				if (!isLocatingTag) {
+//					if (tagID != null) {
+//
+//						new AsyncTask<Void, Void, Boolean>() {
+//							private InvalidUsageException invalidUsageException;
+//							private OperationFailureException operationFailureException;
+//
+//							@Override
+//							protected Boolean doInBackground(Void... voids) {
+//								try {
+//									reader.Actions.TagLocationing.Perform(tagID, null, null);
+//								} catch (InvalidUsageException e) {
+//									invalidUsageException = e;
+//								} catch (OperationFailureException e) {
+//									operationFailureException = e;
+//								}
+//								return null;
+//							}
+//
+//							@Override
+//							protected void onPostExecute(Boolean result) {
+//								isLocatingTag = true;
+//								WritableMap event = Arguments.createMap();
+//								if (invalidUsageException != null) {
+//									event.putString("error", invalidUsageException.getInfo());
+//								} else if (operationFailureException != null) {
+//									event.putString("error", operationFailureException.getVendorMessage());
+//								}
+//								dispatchEvent("locateTag", event);
+//							}
+//						}.execute();
+//					}
+//				} else {
+//					new AsyncTask<Void, Void, Boolean>() {
+//						private InvalidUsageException invalidUsageException;
+//						private OperationFailureException operationFailureException;
+//
+//						@Override
+//						protected Boolean doInBackground(Void... voids) {
+//							isLocatingTag = false;
+//							try {
+//								reader.Actions.TagLocationing.Stop();
+//							} catch (InvalidUsageException e) {
+//								invalidUsageException = e;
+//							} catch (OperationFailureException e) {
+//								operationFailureException = e;
+//							}
+//							return null;
+//						}
+//
+//						@Override
+//						protected void onPostExecute(Boolean result) {
+//
+//							WritableMap event = Arguments.createMap();
+//							if (invalidUsageException != null) {
+//								event.putString("error", invalidUsageException.getInfo());
+//							} else if (operationFailureException != null) {
+//								event.putString("error", operationFailureException.getVendorMessage());
+//							}
+//							dispatchEvent("locateTag", event);
+//						}
+//					}.execute();
+//				}
+//			} else {
+//				event.putString("error", "Reader capabilities not updated");
+//				dispatchEvent("locateTag", event);
+//			}
+//		} else {
+//			event.putString("error", "No Active Connection with Reader");
+//			dispatchEvent("locateTag", event);
+//		}
+//	}
 
 	// Program tag
 	public void writeTag(final String targetTag, String newTag) throws Exception {
@@ -797,10 +783,81 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	public void locateMode(boolean value) {
 		if (reader != null && reader.isConnected()) {
 			isLocateMode = value;
-			if (!isLocateMode) {
-				isLocatingTag = true;
-				this.LoopForLocateTag();
+//			if (!isLocateMode) {
+//				isLocatingTag = true;
+//				LoopForLocateTag();
+//			}
+		}
+	}
+
+	private void executeLocateTag() throws Exception {
+		if (reader != null && reader.isConnected()) {
+			if (!isLocatingTag) {
+				if (tagID != null) {
+					isLocatingTag = true;
+
+					new AsyncTask<Void, Void, Boolean>() {
+						private InvalidUsageException invalidUsageException;
+						private OperationFailureException operationFailureException;
+
+						@Override
+						protected Boolean doInBackground(Void... voids) {
+							try {
+								reader.Actions.TagLocationing.Perform(tagID, null, null);
+							} catch (InvalidUsageException e) {
+								e.printStackTrace();
+								invalidUsageException = e;
+							} catch (OperationFailureException e) {
+								e.printStackTrace();
+								operationFailureException = e;
+							}
+							return null;
+						}
+
+						@Override
+						protected void onPostExecute(Boolean result) {
+							if (invalidUsageException != null) {
+								HandleError("executeLocateTag", invalidUsageException.getInfo());
+							} else if (operationFailureException != null) {
+								HandleError("executeLocateTag", operationFailureException.getVendorMessage());
+							}
+						}
+					}.execute();
+				} else {
+					throw new Exception("tag id cannot be empty");
+				}
+			} else {
+				new AsyncTask<Void, Void, Boolean>() {
+					private InvalidUsageException invalidUsageException;
+					private OperationFailureException operationFailureException;
+
+					@Override
+					protected Boolean doInBackground(Void... voids) {
+						try {
+							reader.Actions.TagLocationing.Stop();
+						} catch (InvalidUsageException e) {
+							invalidUsageException = e;
+							e.printStackTrace();
+						} catch (OperationFailureException e) {
+							operationFailureException = e;
+							e.printStackTrace();
+						}
+						return null;
+					}
+
+					@Override
+					protected void onPostExecute(Boolean result) {
+						isLocatingTag = false;
+						if (invalidUsageException != null) {
+							HandleError("executeLocateTag", invalidUsageException.getInfo());
+						} else if (operationFailureException != null) {
+							HandleError("executeLocateTag", operationFailureException.getVendorMessage());
+						}
+					}
+				}.execute();
 			}
+		} else {
+			throw new Exception("Reader is not connected");
 		}
 	}
 
@@ -840,27 +897,27 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 				try {
 					Antennas.AntennaRfConfig antennaRfConfig = reader.Config.Antennas
 							.getAntennaRfConfig(1);
-					int index = Integer.parseInt(config.getString("antennaLevel"));
+					int index = Integer.parseInt(Objects.requireNonNull(config.getString("antennaLevel")));
 					antennaRfConfig.setTransmitPowerIndex(index * 10);
 					reader.Config.Antennas.setAntennaRfConfig(1, antennaRfConfig);
 				} catch (InvalidUsageException e) {
-					throw e;
+					throw new Exception(e.getVendorMessage());
 				} catch (OperationFailureException e) {
-					throw e;
+					throw new Exception(e.getVendorMessage());
 				} catch (NumberFormatException e) {
 					throw e;
 				}
 			}
 			if (config.hasKey("singulationControl")) {
-				int index = Integer.parseInt(config.getString("singulationControl"));
+				int index = Integer.parseInt(Objects.requireNonNull(config.getString("singulationControl")));
 				try {
 					Antennas.SingulationControl singulationControl = reader.Config.Antennas.getSingulationControl(1);
 					singulationControl.setTagPopulation((short) 600);
 					reader.Config.Antennas.setSingulationControl(1, singulationControl);
 				} catch (InvalidUsageException e) {
-					throw e;
+					throw new Exception(e.getVendorMessage());
 				} catch (OperationFailureException e) {
-					throw e;
+					throw new Exception(e.getVendorMessage());
 				}
 			}
 			return true;
@@ -889,26 +946,25 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 
 			final TagData[] myTags = reader.Actions.getReadTags(100);
 			if (myTags != null) {
-				for (int index = 0; index < myTags.length; index++) {
-					if (myTags[index].getOpCode() == ACCESS_OPERATION_CODE.ACCESS_OPERATION_READ
-							&& myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS) {
-						Log.i("RFID", "Tag ID = " + myTags[index]);
+				for (TagData myTag : myTags) {
+					if (myTag.getOpCode() == ACCESS_OPERATION_CODE.ACCESS_OPERATION_READ
+							&& myTag.getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS) {
+						Log.i("RFID", "Tag ID = " + myTag);
 					}
 
-					Log.i("RFID", "Tag ID = " + myTags[index].getTagID());
+					Log.i("RFID", "Tag ID = " + myTag.getTagID());
 
-					if (myTags[index].isContainsLocationInfo()) {
-						final int tag = index;
-						short tagProximityPercent = myTags[tag].LocationInfo.getRelativeDistance();
+					if (myTag.isContainsLocationInfo()) {
+//						final int tag = index;
+						short tagProximityPercent = myTag.LocationInfo.getRelativeDistance();
 						WritableMap event = Arguments.createMap();
 						event.putInt("distance", tagProximityPercent);
 						dispatchEvent("locateTag", event);
 					}
 
-					if (myTags[index] != null && (myTags[index].getOpStatus() == null
-							|| myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS)) {
-						String EPC = myTags[index].getTagID();
-						int rssi = myTags[index].getPeakRSSI();
+					if (myTag.getOpStatus() == null || myTag.getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS) {
+						String EPC = myTag.getTagID();
+						int rssi = myTag.getPeakRSSI();
 						if (!isLocateMode) {
 							if (currentRoute != null && currentRoute.equals("tagit")) {
 								if (rssi > -40) {
@@ -959,7 +1015,8 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 				if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED) {
 					try {
 						if (isLocateMode) {
-							LoopForLocateTag();
+							executeLocateTag();
+//							LoopForLocateTag();
 						} else if (isReadBarcode) {
 							if (barcodeDeviceConnected) {
 								barcodePullTrigger();
@@ -975,8 +1032,9 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 				} else if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED) {
 					try {
 						if (isLocateMode) {
-							isLocatingTag = true;
-							LoopForLocateTag();
+							executeLocateTag();
+//							isLocatingTag = true;
+//							LoopForLocateTag();
 						} else if (isReadBarcode) {
 							if (barcodeDeviceConnected) {
 								barcodeReleaseTrigger();
