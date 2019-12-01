@@ -1,15 +1,11 @@
 package com.reactlibrary;
 
 import android.os.AsyncTask;
-import android.content.Context;
-import android.os.Handler;
 import android.util.Log;
 
 import java.util.ArrayList;
 import java.lang.NullPointerException;
-import java.util.HashMap;
 
-import com.facebook.react.bridge.Promise;
 import com.zebra.rfid.api3.*;
 import com.zebra.scannercontrol.*;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -20,48 +16,45 @@ import com.facebook.react.bridge.WritableMap;
 
 import static com.facebook.react.bridge.UiThreadUtil.runOnUiThread;
 
-public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEventsListener, IDcsSdkApiDelegate {
+public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers.RFIDReaderEventHandler,
+		IDcsSdkApiDelegate {
 
 	private ReactApplicationContext context;
-	private String currentRoute = null;
+
 	// RFID
 	private Readers readers = null;
-	private ArrayList<ReaderDevice> deviceList = null;
-	private ReaderDevice rfidReaderDevice = null;
-	private boolean tempDisconnected = false;
-	private Boolean reading = false;
-	private ReadableMap config = null;
-	private ArrayList<String> scannedTags = new ArrayList<>();
-	private int batteryLevel = -1;
+	private static RFIDReader reader;
+	private static EventHandler eventHandler = null;
+	private static ArrayList<ReaderDevice> deviceList = null;
+	private static Boolean reading = false;
+	private static ArrayList<String> scannedTags = new ArrayList<>();
+	private final int MAX_POWER = 290;
 
-	// Save scanner name
-	private String selectedScanner = null;
+	//Flag current react native page
+	private static String currentRoute = null;
+
+	// Save reader name
+	private static String selectedScanner = null;
 
 	// Locate Tag
-	private boolean isLocatingTag = false;
-	private boolean isLocateMode = false;
-	private String tagID = "";
+	private static boolean isLocatingTag = false;
+	private static boolean isLocateMode = false;
+	private static String tagID = "";
 
 	// Tag IT
-	private boolean isTagITMode = false;
-	private boolean isReadBarcode = false;
-	private boolean isProgrammingTag = false;
-
-	// Audit
-	private boolean isAuditMode = false;
+	private static boolean isReadBarcode = false;
+	private static boolean isProgrammingTag = false;
 
 	// Instance of SDK Handler, Barcode
-	private static SDKHandler sdkHandler;
-	private ArrayList<DCSScannerInfo> scannerAvailableList = new ArrayList<>();
-	private boolean barcodeDeviceConnected = false;
-	private int BarcodeScannerID = 0;
+	private SDKHandler sdkHandler;
+	private static ArrayList<DCSScannerInfo> scannerAvailableList = new ArrayList<>();
+	private static boolean barcodeDeviceConnected = false;
+	private static int BarcodeScannerID = 0;
 
 	public RNRfidBarcodeZebraThread(ReactApplicationContext context) {
 		this.context = context;
-	}
-
-	public void run() {
-
+		eventHandler = new EventHandler();
+		init();
 	}
 
 	public abstract void dispatchEvent(String name, WritableMap data);
@@ -88,17 +81,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	}
 
 	public void onHostDestroy() {
-		if (this.reading) {
-			this.cancel();
-		}
-		shutdown();
-		barcodeDisconnect();
-	}
-
-	public void onCatalystInstanceDestroy() {
-		if (this.reading) {
-			this.cancel();
-		}
 		shutdown();
 		barcodeDisconnect();
 	}
@@ -156,9 +138,6 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 				scannerAvailableList.add(s);
 				if (s.getAuxiliaryScanners() != null) {
 					scannerAvailableList.addAll(s.getAuxiliaryScanners().values());
-//					for (DCSScannerInfo aux : s.getAuxiliaryScanners().values()) {
-//						scannerAvailableList.add(aux);
-//					}
 				}
 			}
 		}
@@ -177,31 +156,35 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 					result = sdkHandler.dcssdkEstablishCommunicationSession(BarcodeScannerID);
 					if (result == DCSSDKDefs.DCSSDK_RESULT.DCSSDK_RESULT_SUCCESS) {
 						barcodeDeviceConnected = true;
-						// return true;
 					} else if (result == DCSSDKDefs.DCSSDK_RESULT.DCSSDK_RESULT_FAILURE) {
 						barcodeDeviceConnected = false;
-						// return false;
+						throw new Exception("Barcode scanner connection fail");
 					}
 				} catch (Exception e) {
-					event.putString("error", e.getMessage());
-					dispatchEvent("barcodeError", event);
 					throw e;
 				}
 			} else {
-				event.putString("error", "DCSSDK_RESULT_SCANNER_NOT_AVAILABLE");
-				dispatchEvent("barcodeError", event);
 				throw new Exception("Barcode scanner not available");
 			}
 		} else {
-			event.putString("error", "DCSSDK_RESULT_SCANNER_ALREADY_ACTIVE");
-			dispatchEvent("barcodeError", event);
 			throw new Exception("Barcode scanner already connected");
 		}
 		return barcodeDeviceConnected;
 	}
 
+	// Barcode disconnect
+	public void barcodeDisconnect() {
+		if (barcodeDeviceConnected) {
+			sdkHandler.dcssdkTerminateCommunicationSession(BarcodeScannerID);
+			barcodeDeviceConnected = false;
+			BarcodeScannerID = 0;
+			sdkHandler = null;
+			scannerAvailableList = new ArrayList<>();
+		}
+	}
+
 	// Trigger barcode read.
-	public void barcodePullTrigger() {
+	private void barcodePullTrigger() {
 		if (BarcodeScannerID != 0) {
 			StringBuilder outXML = null;
 			String in_xml = "<inArgs><scannerID>" + BarcodeScannerID + "</scannerID></inArgs>";
@@ -211,7 +194,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	}
 
 	// Release barcode trigger
-	public void barcodeReleaseTrigger() {
+	private void barcodeReleaseTrigger() {
 		if (BarcodeScannerID != 0) {
 			StringBuilder outXML = null;
 			String in_xml = "<inArgs><scannerID>" + BarcodeScannerID + "</scannerID></inArgs>";
@@ -259,13 +242,11 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	@Override
 	public void dcssdkEventCommunicationSessionTerminated(int scannerID) {
 		barcodeDeviceConnected = false;
-		// this.dispatchEvent("barcode", "dcssdkEventCommunicationSessionTerminated");
 	}
 
 	@Override
 	public void dcssdkEventCommunicationSessionEstablished(DCSScannerInfo activeScanner) {
 		barcodeDeviceConnected = true;
-//		CheckBarcodeRFIDConnection();
 	}
 
 	@Override
@@ -278,351 +259,240 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		// this.dispatchEvent("barcode", "dcssdkEventScannerAppeared");
 	}
 
-	public WritableArray GetAvailableBluetoothDevices() {
-		WritableArray availableRFIDReaderList = Arguments.createArray();
-		if (this.rfidReaderDevice == null) {
+	public WritableArray GetAvailableBluetoothDevices() throws Exception {
+		WritableArray list = Arguments.createArray();
+		if (readers == null) {
 			readers = new Readers(this.context, ENUM_TRANSPORT.BLUETOOTH);
-			try {
-				ArrayList<ReaderDevice> list = readers.GetAvailableRFIDReaderList();
-				for (int i = 0; i < list.size(); i++) {
-					ReaderDevice reader = list.get(i);
-					WritableMap map = Arguments.createMap();
-					map.putString("name", reader.getName());
-					map.putString("address", reader.getAddress());
-					map.putString("password", reader.getPassword());
-					availableRFIDReaderList.pushMap(map);
-				}
-			} catch (InvalidUsageException e) {
-				Log.e("RFID", "Init scanner error - invalid message: " + e.getMessage());
-			} catch (NullPointerException ex) {
-				Log.e("RFID", "Blue tooth not support on device");
-			}
 		}
-		return availableRFIDReaderList;
+		try {
+			deviceList = readers.GetAvailableRFIDReaderList();
+			for (ReaderDevice device : deviceList) {
+				WritableMap map = Arguments.createMap();
+				map.putString("name", device.getName());
+				map.putString("address", device.getAddress());
+				map.putString("password", device.getPassword());
+				list.pushMap(map);
+			}
+		} catch (InvalidUsageException e) {
+			throw new Exception("Init scanner error - invalid message: " + e.getMessage());
+		} catch (NullPointerException ex) {
+			throw new Exception("Blue tooth not support on device");
+		}
+		return list;
 	}
 
-	private void connect() throws Exception {
-		System.out.println(Thread.currentThread());
+	private void init() {
+		readers = new Readers(context, ENUM_TRANSPORT.BLUETOOTH);
+
+//		tempDisconnected = false;
+		reading = false;
+	}
+
+	public void connect() throws Exception {
 		String err = null;
-		if (this.rfidReaderDevice != null) {
-			if (rfidReaderDevice.getRFIDReader().isConnected())
+		if (reader != null) {
+			if (reader.isConnected())
 				return;
 			disconnect();
 		}
 		try {
-
 			Log.v("RFID", "initScanner");
 
-			ArrayList<ReaderDevice> availableRFIDReaderList = null;
-			try {
-				availableRFIDReaderList = readers.GetAvailableRFIDReaderList();
-				Log.v("RFID", "Available number of reader : " + availableRFIDReaderList.size());
-				deviceList = availableRFIDReaderList;
+			readers.attach(this);
 
-			} catch (InvalidUsageException e) {
-				Log.e("RFID", "Init scanner error - invalid message: " + e.getMessage());
-				throw e;
-			} catch (NullPointerException ex) {
-				Log.e("RFID", "Blue tooth not support on device");
-				throw ex;
-			}
-
-			int listSize = (availableRFIDReaderList == null) ? 0 : availableRFIDReaderList.size();
-			Log.v("RFID", "Available number of reader : " + listSize);
-
-			if (listSize > 0) {
-				int index = -1;
-				for (int i = 0; i < availableRFIDReaderList.size(); i++) {
-					String name = availableRFIDReaderList.get(i).getName();
-					if (name.equals(selectedScanner)) {
-						index = i;
-						break;
+			if (deviceList.size() > 0) {
+				for (ReaderDevice device : deviceList) {
+					if (device.getName().equals(selectedScanner)) {
+						reader = device.getRFIDReader();
 					}
 				}
-
-				ReaderDevice readerDevice = availableRFIDReaderList.get(index);
-				RFIDReader rfidReader = readerDevice.getRFIDReader();
-				// Connect to RFID reader
-
-				if (rfidReader != null) {
-					while (true) {
-						try {
-							rfidReader.connect();
-							rfidReader.Config.getDeviceStatus(true, false, false);
-							rfidReader.Events.addEventsListener(this);
-							// Subscribe required status notification
-							rfidReader.Events.setInventoryStartEvent(true);
-							rfidReader.Events.setInventoryStopEvent(true);
-							// enables tag read notification
-							rfidReader.Events.setTagReadEvent(true);
-							rfidReader.Events.setReaderDisconnectEvent(true);
-							rfidReader.Events.setBatteryEvent(true);
-							rfidReader.Events.setBatchModeEvent(true);
-							rfidReader.Events.setHandheldEvent(true);
-							rfidReader.Events.setPowerEvent(true);
-							rfidReader.Events.setOperationEndSummaryEvent(true);
-
-							// Set trigger mode
-							setTriggerImmediate(rfidReader);
-							break;
-						} catch (OperationFailureException ex) {
-							if (ex.getResults() == RFIDResults.RFID_READER_REGION_NOT_CONFIGURED) {
-								// Get and Set regulatory configuration settings
-								try {
-									RegulatoryConfig regulatoryConfig = rfidReader.Config.getRegulatoryConfig();
-									SupportedRegions regions = rfidReader.ReaderCapabilities.SupportedRegions;
-									int len = regions.length();
-									boolean regionSet = false;
-									for (int i = 0; i < len; i++) {
-										RegionInfo regionInfo = regions.getRegionInfo(i);
-										if ("AUS".equals(regionInfo.getRegionCode())) {
-											regulatoryConfig.setRegion(regionInfo.getRegionCode());
-											rfidReader.Config.setRegulatoryConfig(regulatoryConfig);
-											Log.i("RFID", "Region set to " + regionInfo.getName());
-											regionSet = true;
-											break;
-										}
+				if (reader != null) {
+					try {
+						reader.connect();
+						ConfigureReader();
+					} catch (OperationFailureException e) {
+						if (e.getResults() == RFIDResults.RFID_READER_REGION_NOT_CONFIGURED) {
+							try {
+								RegulatoryConfig regulatoryConfig =
+										reader.Config.getRegulatoryConfig();
+								SupportedRegions regions =
+										reader.ReaderCapabilities.SupportedRegions;
+								int len = regions.length();
+								boolean regionSet = false;
+								for (int i = 0; i < len; i++) {
+									RegionInfo regionInfo = regions.getRegionInfo(i);
+									if ("AUS".equals(regionInfo.getRegionCode())) {
+										regulatoryConfig.setRegion(regionInfo.getRegionCode());
+										reader.Config.setRegulatoryConfig(regulatoryConfig);
+										Log.i("RFID", "Region set to " + regionInfo.getName());
+										regionSet = true;
 									}
-									if (!regionSet) {
-										err = "Region not found";
-										break;
-									}
-								} catch (OperationFailureException ex1) {
-									err = "Error setting RFID region: " + ex1.getMessage();
-									break;
 								}
-							} else if (ex.getResults() == RFIDResults.RFID_CONNECTION_PASSWORD_ERROR) {
-								// Password error
-								err = "Password error";
-								break;
-							} else if (ex.getResults() == RFIDResults.RFID_BATCHMODE_IN_PROGRESS) {
-								// handle batch mode related stuff
-								err = "Batch mode in progress";
-								break;
-							} else {
-								err = ex.getResults().toString();
-								break;
+								if (!regionSet) {
+									err = "Region not found";
+								}
+							} catch (OperationFailureException ex1) {
+								err = "Error setting RFID region: " + ex1.getMessage();
 							}
-						} catch (InvalidUsageException e1) {
-							Log.e("RFID", "InvalidUsageException: " + e1.getMessage() + " " + e1.getInfo());
-							err = "Invalid usage " + e1.getMessage();
-							break;
+						} else if (e.getResults() == RFIDResults.RFID_CONNECTION_PASSWORD_ERROR) {
+							// Password error
+							err = "Password error";
+						} else if (e.getResults() == RFIDResults.RFID_BATCHMODE_IN_PROGRESS) {
+							// handle batch mode related stuff
+							err = "Batch mode in progress";
+						} else {
+							err = e.getResults().toString();
 						}
+					} catch (InvalidUsageException e) {
+						throw new Exception(e.getMessage());
+					} catch (Exception e) {
+						throw e;
 					}
+
 				} else {
 					err = "Cannot get rfid reader";
 				}
+
 				if (err == null) {
 					// Connect success
-					rfidReaderDevice = readerDevice;
-					selectedScanner = rfidReaderDevice.getName();
-					tempDisconnected = false;
-					WritableMap event = Arguments.createMap();
-					event.putString("RFIDStatusEvent", "opened");
-					this.dispatchEvent("RFIDStatusEvent", event);
-					Log.i("RFID", "Connected to " + rfidReaderDevice.getName());
-					CheckBarcodeRFIDConnection();
-					return;
+					Log.i("RFID", "Connected to " + reader.getHostName());
 				}
 			} else {
 				err = "No connected device";
 			}
+
+			if (err != null) {
+				throw new Exception(err);
+			}
+
 		} catch (InvalidUsageException e) {
 			err = "connect: invalid usage error: " + e.getMessage();
-		}
-		if (err != null) {
-			Log.e("RFID", err);
-			throw new Exception(err);
+			throw new Exception("connect: invalid usage error: " + e.getMessage());
 		}
 	}
 
-	private void CheckBarcodeRFIDConnection() {
-//		if (rfidReaderDevice.getRFIDReader().isConnected() && barcodeDeviceConnected) {
-		if (rfidReaderDevice.getRFIDReader().isConnected()) {
-			// ChangeBeeperVolume(false);
-			WritableMap event = Arguments.createMap();
-			event.putBoolean("ConnectionState", true);
-			event.putString("BatteryLevel", String.valueOf(batteryLevel));
-			// event.putString("RFIDStatusEvent", "connected");
-			this.dispatchEvent("RFIDStatusEvent", event);
-			try {
-				switchDPO(true);
-				WritableMap map = Arguments.createMap();
-				map.putString("singulationControl", "600");
-				saveAntennaConfig(map);
-				rfidReaderDevice.getRFIDReader().Config.setBatchMode(BATCH_MODE.DISABLE);
-				// rfidReaderDevice.getRFIDReader().Config.setBeeperVolume(BEEPER_VOLUME.QUIET_BEEP);
-			} catch (InvalidUsageException e) {
-				Log.i("Connection", e.getInfo());
-			} catch (OperationFailureException e) {
-				Log.i("Connection", e.getVendorMessage());
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+	private void ConfigureReader() throws Exception {
+		Log.d("ConfigureReader", "ConfigureReader " + reader.getHostName());
+		if (reader.isConnected()) {
+			TriggerInfo triggerInfo = new TriggerInfo();
+			triggerInfo.StartTrigger.setTriggerType(START_TRIGGER_TYPE.START_TRIGGER_TYPE_IMMEDIATE);
+			triggerInfo.StopTrigger.setTriggerType(STOP_TRIGGER_TYPE.STOP_TRIGGER_TYPE_IMMEDIATE);
+
+			// receive events from reader
+			if (eventHandler == null)
+				eventHandler = new EventHandler();
+			reader.Events.addEventsListener(eventHandler);
+
+			reader.Events.setReaderDisconnectEvent(true);
+			reader.Events.setInventoryStartEvent(true);
+			reader.Events.setInventoryStopEvent(true);
+			reader.Events.setPowerEvent(true);
+			reader.Events.setOperationEndSummaryEvent(true);
+
+			//Battery event
+			reader.Events.setBatteryEvent(true);
+			// HH event. Control active reader
+			reader.Events.setHandheldEvent(true);
+			// tag event with tag data
+			reader.Events.setTagReadEvent(true);
+			reader.Events.setAttachTagDataWithReadEvent(false);
+
+			//Disable batch mode
+			reader.Events.setBatchModeEvent(false);
+			reader.Config.setBatchMode(BATCH_MODE.DISABLE);
+
+			//Turn Off beeper
+			reader.Config.setBeeperVolume(BEEPER_VOLUME.QUIET_BEEP);
+
+			// set trigger mode as rfid so scanner beam will not come
+			reader.Config.setTriggerMode(ENUM_TRIGGER_MODE.RFID_MODE, true);
+			// set start and stop triggers
+			reader.Config.setStartTrigger(triggerInfo.StartTrigger);
+			reader.Config.setStopTrigger(triggerInfo.StopTrigger);
+			//set DPO enable
+			reader.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.ENABLE);
+//			// power levels are index based so maximum power supported get the last one
+//			MAX_POWER = reader.ReaderCapabilities.getTransmitPowerLevelValues().length - 1;
+			// set antenna configurations
+			Antennas.AntennaRfConfig config = reader.Config.Antennas.getAntennaRfConfig(1);
+			config.setTransmitPowerIndex(MAX_POWER);
+			config.setrfModeTableIndex(0);
+			config.setTari(0);
+			reader.Config.Antennas.setAntennaRfConfig(1, config);
+			// Set the singulation control
+			Antennas.SingulationControl s1_singulationControl = reader.Config.Antennas.getSingulationControl(1);
+			s1_singulationControl.setSession(SESSION.SESSION_S0);
+			s1_singulationControl.Action.setInventoryState(INVENTORY_STATE.INVENTORY_STATE_A);
+			s1_singulationControl.Action.setSLFlag(SL_FLAG.SL_ALL);
+			reader.Config.Antennas.setSingulationControl(1, s1_singulationControl);
+			// delete any prefilters
+			reader.Actions.PreFilters.deleteAll();
+
+			reader.Config.getDeviceStatus(true, false, false);
 		}
 	}
 
-	/**
-	 * Set trigger mode
-	 */
-	private void setTriggerImmediate(RFIDReader reader) throws InvalidUsageException, OperationFailureException {
-		TriggerInfo triggerInfo = new TriggerInfo();
-		// Start trigger: set to immediate mode
-		triggerInfo.StartTrigger.setTriggerType(START_TRIGGER_TYPE.START_TRIGGER_TYPE_IMMEDIATE);
-		// Stop trigger: set to immediate mode
-		triggerInfo.StopTrigger.setTriggerType(STOP_TRIGGER_TYPE.STOP_TRIGGER_TYPE_IMMEDIATE);
-		reader.Config.setStartTrigger(triggerInfo.StartTrigger);
-		reader.Config.setStopTrigger(triggerInfo.StopTrigger);
-	}
-
-	// Barcode disconnect
-	public void barcodeDisconnect() {
-		if (barcodeDeviceConnected) {
-			try {
-				sdkHandler.dcssdkTerminateCommunicationSession(BarcodeScannerID);
-				barcodeDeviceConnected = false;
-				BarcodeScannerID = 0;
-				sdkHandler = null;
-				scannerAvailableList = new ArrayList<>();
-
-			} catch (Exception e) {
-				WritableMap event = Arguments.createMap();
-				event.putString("error", e.getMessage());
-				dispatchEvent("barcodeError", event);
-			}
-
-		}
-	}
-
-	// RFID disconnect
 	private void disconnect() {
-
-		if (this.rfidReaderDevice != null) {
-			RFIDReader rfidReader = rfidReaderDevice.getRFIDReader();
+		if (reader != null) {
 			String err = null;
-			if (!rfidReader.isConnected()) {
+			if (!reader.isConnected()) {
 				Log.i("RFID", "disconnect: already disconnected");
 				// already disconnected
 			} else {
 				try {
-					rfidReader.disconnect();
+					if (reading) {
+						cancel();
+					}
+					reader.Events.removeEventsListener(eventHandler);
+					reader.disconnect();
+
+					// RFID
+					readers = null;
+					reader = null;
+					eventHandler = null;
+					deviceList = null;
+					reading = false;
+					scannedTags = new ArrayList<>();
+
+					//Flag current react native page
+					currentRoute = null;
+
+					// Save reader name
+					selectedScanner = null;
+
+					// Locate Tag
+					isLocatingTag = false;
+					isLocateMode = false;
+					tagID = null;
+
+					// Tag IT
+					isReadBarcode = false;
+					isProgrammingTag = false;
 				} catch (InvalidUsageException e) {
-					err = "disconnect: invalid usage error: " + e.getMessage();
-				} catch (OperationFailureException ex) {
-					err = "disconnect: " + ex.getResults().toString();
+					err = e.getMessage();
+				} catch (OperationFailureException e) {
+					err = e.getMessage();
+				} catch (Exception e) {
+					err = e.getMessage();
 				}
-			}
-			try {
-				if (rfidReader.Events != null) {
-					rfidReader.Events.removeEventsListener(this);
-				}
-			} catch (InvalidUsageException e) {
-				err = "disconnect: invalid usage error when removing events: " + e.getMessage();
-			} catch (OperationFailureException ex) {
-				err = "disconnect: error removing events: " + ex.getResults().toString();
 			}
 			if (err != null) {
-				Log.e("RFID", err);
+				HandleError(err, "disconnect");
 			}
+
 			// Ignore error and send feedback
 			WritableMap event = Arguments.createMap();
 			event.putString("RFIDStatusEvent", "closed");
-			this.dispatchEvent("RFIDStatusEvent", event);
-			rfidReaderDevice = null;
-			tempDisconnected = false;
+			dispatchEvent("RFIDStatusEvent", event);
 		} else {
 			Log.w("RFID", "disconnect: no device was connected");
 		}
 	}
 
-	public void reconnect() throws Exception {
-		if (this.rfidReaderDevice != null) {
-			if (tempDisconnected) {
-				RFIDReader rfidReader = this.rfidReaderDevice.getRFIDReader();
-				if (!rfidReader.isConnected()) {
-					String err = null;
-					try {
-						// Stop inventory
-						rfidReader.reconnect();
-						barcodeConnect();
-					} catch (InvalidUsageException e) {
-						err = "reconnect: invalid usage error: " + e.getMessage();
-					} catch (OperationFailureException ex) {
-						err = "reconnect error: " + ex.getResults().toString();
-					}
-					if (err != null) {
-						Log.e("RFID", err);
-					} else {
-						tempDisconnected = false;
-						WritableMap event = Arguments.createMap();
-						event.putString("RFIDStatusEvent", "opened");
-						this.dispatchEvent("RFIDStatusEvent", event);
-						Log.i("RFID", "Reconnected to " + rfidReaderDevice.getName());
-					}
-				} else {
-					Log.i("RFID", rfidReaderDevice.getName() + " is already connected");
-				}
-			} else {
-				Log.i("RFID", "reconnect: not temp disconnected");
-			}
-		} else {
-			Log.i("RFID", "reconnect: device is null");
-			init(this.context);
-			barcodeConnect();
-		}
-	}
-
-	public void SaveCurrentRoute(String value) {
-		if (value != null) {
-			currentRoute = value.toLowerCase();
-			if (currentRoute.equals("register") || currentRoute.equals("lookup") || currentRoute.equals("audit")
-					|| currentRoute.equals("tagit") || currentRoute.equals("pickreceive")) {
-				ChangeBeeperVolume(false);
-				if (currentRoute.equals("tagit")) {
-					switchDPO(false);
-				}
-			}
-		} else {
-			ChangeBeeperVolume(true);
-			switchDPO(true);
-		}
-	}
-
-	public void SaveSelectedScanner(String scanner) {
-		selectedScanner = scanner;
-	}
-
-	public String GetConnectedReader() {
-		if (selectedScanner != null)
-			return selectedScanner;
-		else return null;
-	}
-
-	public void init(Context context) throws Exception {
-		// Register receiver
-		Log.v("RFID", "init");
-		readers = new Readers(context, ENUM_TRANSPORT.BLUETOOTH);
-		try {
-			ArrayList<ReaderDevice> availableRFIDReaderList = readers.GetAvailableRFIDReaderList();
-			Log.v("RFID", "Available number of reader : " + availableRFIDReaderList.size());
-			deviceList = availableRFIDReaderList;
-
-			Log.v("RFID", "Scanner thread initialized");
-		} catch (InvalidUsageException e) {
-			Log.e("RFID", "Init scanner error - invalid message: " + e.getMessage());
-			throw e;
-		} catch (NullPointerException ex) {
-			Log.e("RFID", "Blue tooth not support on device");
-			throw ex;
-		}
-		tempDisconnected = false;
-		reading = false;
-		this.connect();
-	}
-
 	public void shutdown() {
-		if (this.rfidReaderDevice != null) {
+		if (reader != null) {
 			disconnect();
+			reader = null;
 		}
 		// Unregister receiver
 		if (readers != null) {
@@ -632,20 +502,44 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		deviceList = null;
 	}
 
-	public void read(ReadableMap config) {
-		if (this.reading) {
+	public void SaveCurrentRoute(String value) throws Exception {
+
+		currentRoute = value;
+
+		if (currentRoute != null && currentRoute.equalsIgnoreCase("tagit")) {
+			enableDPO(false);
+		} else if (currentRoute != null && currentRoute.equalsIgnoreCase("locatetag")) {
+			enableBeeper(true);
+		} else {
+			//
+		}
+	}
+
+	public void SaveSelectedScanner(String scanner) {
+		selectedScanner = scanner;
+	}
+
+	public String GetConnectedReader() {
+		if (reader != null && reader.isConnected())
+			return reader.getHostName();
+		else {
+			return null;
+		}
+	}
+
+	public void read() throws Exception {
+		if (reading) {
 			Log.e("RFID", "already reading");
-			return;
+			throw new Exception("Already reading");
 		}
 		String err = null;
-		if (this.rfidReaderDevice != null) {
-			if (!rfidReaderDevice.getRFIDReader().isConnected()) {
+		if (reader != null) {
+			if (!reader.isConnected()) {
 				err = "read: device not connected";
 			} else {
-				RFIDReader rfidReader = rfidReaderDevice.getRFIDReader();
 				try {
 					// Perform inventory
-					rfidReader.Actions.Inventory.perform();
+					reader.Actions.Inventory.perform();
 					reading = true;
 				} catch (InvalidUsageException e) {
 					err = "read: invalid usage error on scanner read: " + e.getMessage();
@@ -658,20 +552,20 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		}
 		if (err != null) {
 			Log.e("RFID", err);
+			throw new Exception(err);
 		}
 	}
 
-	public void cancel() {
+	public void cancel() throws Exception {
 		String err = null;
-		if (this.rfidReaderDevice != null) {
-			if (!this.rfidReaderDevice.getRFIDReader().isConnected()) {
+		if (reader != null) {
+			if (!reader.isConnected()) {
 				err = "cancel: device not connected";
 			} else {
 				if (reading) {
-					RFIDReader rfidReader = rfidReaderDevice.getRFIDReader();
 					try {
 						// Stop inventory
-						rfidReader.Actions.Inventory.stop();
+						reader.Actions.Inventory.stop();
 					} catch (InvalidUsageException e) {
 						err = "cancel: invalid usage error on scanner read: " + e.getMessage();
 					} catch (OperationFailureException ex) {
@@ -684,14 +578,14 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 			err = "cancel: device not initialised";
 		}
 		if (err != null) {
-			Log.e("RFID", err);
+			throw new Exception(err);
 		}
 	}
 
 	// Check RFID scanner is connected or not.
 	public boolean isConnected() {
-		if (this.rfidReaderDevice != null) {
-			return rfidReaderDevice.getRFIDReader().isConnected();
+		if (reader != null) {
+			return reader.isConnected();
 		} else {
 			return false;
 		}
@@ -699,7 +593,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 
 	public boolean AttemptToReconnect() throws Exception {
 		if (selectedScanner != null) {
-			init(this.context);
+			connect();
 			barcodeConnect();
 			return true;
 		}
@@ -707,23 +601,24 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	}
 
 	// Turn on/off dynamic power management.
-	public String switchDPO(boolean value) {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
+	private void enableDPO(boolean value) throws Exception {
+		String err = null;
+		if (reader != null && reader.isConnected()) {
 			try {
 				if (value) {
-					this.rfidReaderDevice.getRFIDReader().Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.ENABLE);
-					return "DPO switch on";
+					reader.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.ENABLE);
 				} else {
-					this.rfidReaderDevice.getRFIDReader().Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.DISABLE);
-					return "DPO switch off";
+					reader.Config.setDPOState(DYNAMIC_POWER_OPTIMIZATION.DISABLE);
 				}
 			} catch (InvalidUsageException e) {
-				return e.getInfo();
+				err = e.getInfo();
 			} catch (OperationFailureException e) {
-				return e.getVendorMessage();
+				err = e.getVendorMessage();
 			}
 		}
-		return null;
+		if (err != null) {
+			throw new Exception(err);
+		}
 	}
 
 	// Keep locating tag
@@ -739,8 +634,8 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	// Locate tag
 	public void LocateTag() {
 		WritableMap event = Arguments.createMap();
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-			if (this.rfidReaderDevice.getRFIDReader().isCapabilitiesReceived()) {
+		if (reader != null && reader.isConnected()) {
+			if (reader.isCapabilitiesReceived()) {
 				if (!isLocatingTag) {
 					if (tagID != null) {
 
@@ -751,7 +646,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 							@Override
 							protected Boolean doInBackground(Void... voids) {
 								try {
-									rfidReaderDevice.getRFIDReader().Actions.TagLocationing.Perform(tagID, null, null);
+									reader.Actions.TagLocationing.Perform(tagID, null, null);
 								} catch (InvalidUsageException e) {
 									invalidUsageException = e;
 								} catch (OperationFailureException e) {
@@ -782,7 +677,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 						protected Boolean doInBackground(Void... voids) {
 							isLocatingTag = false;
 							try {
-								rfidReaderDevice.getRFIDReader().Actions.TagLocationing.Stop();
+								reader.Actions.TagLocationing.Stop();
 							} catch (InvalidUsageException e) {
 								invalidUsageException = e;
 							} catch (OperationFailureException e) {
@@ -815,10 +710,13 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 	}
 
 	// Program tag
-	public String writeTag(final String targetTag, String newTag) {
+	public void writeTag(final String targetTag, String newTag) throws Exception {
 		if (!isProgrammingTag) {
-			if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-				if (this.rfidReaderDevice.getRFIDReader().isCapabilitiesReceived()) {
+			if (reader != null && reader.isConnected()) {
+				if (reading) {
+					cancel();
+				}
+				if (reader.isCapabilitiesReceived()) {
 					try {
 						if (targetTag != null && newTag != null) {
 							isProgrammingTag = true;
@@ -836,18 +734,20 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 								private WritableMap event = Arguments.createMap();
 								private InvalidUsageException invalidUsageException;
 								private OperationFailureException operationFailureException;
+								private Exception err;
 
 								@Override
 								protected Boolean doInBackground(Void... voids) {
-
 									try {
-										rfidReaderDevice.getRFIDReader().Actions.TagAccess.writeWait(targetTag,
-												writeAccessParams, null, null);
+										reader.Actions.TagAccess.writeWait(targetTag,
+												writeAccessParams, null, null, true, false);
 										bResult = true;
 									} catch (InvalidUsageException e) {
 										invalidUsageException = e;
 									} catch (OperationFailureException e) {
 										operationFailureException = e;
+									} catch (Exception e) {
+										err = e;
 									}
 									return bResult;
 								}
@@ -862,6 +762,9 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 										} else if (operationFailureException != null) {
 											event.putString("error", "" + operationFailureException.getVendorMessage());
 											dispatchEvent("writeTag", event);
+										} else if (err != null) {
+											event.putString("error", err.getMessage());
+											dispatchEvent("writeTag", event);
 										}
 									} else {
 										dispatchEvent("writeTag", "success");
@@ -869,43 +772,30 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 								}
 							}.execute();
 						} else {
-							WritableMap event = Arguments.createMap();
-							event.putString("error", "Tag# cannot be empty");
-							dispatchEvent("writeTag", event);
-							return "Both RFID Tag# cannot be empty.";
+							throw new Exception("Tag# cannot be empty.");
 						}
 					} catch (Exception e) {
-						WritableMap event = Arguments.createMap();
-						event.putString("error", e.getMessage());
-						dispatchEvent("writeTag", event);
-						return "Error: " + e.getMessage();
+						throw e;
 					}
 				} else {
-					WritableMap event = Arguments.createMap();
-					event.putString("error", "Reader capabilities not updated");
-					dispatchEvent("writeTag", event);
-					return "Reader capabilities not updated";
+					throw new Exception("Reader capabilities not updated");
 				}
 			} else {
-				WritableMap event = Arguments.createMap();
-				event.putString("error", "No Active Connection with Reader");
-				dispatchEvent("writeTag", event);
-				return "No Active Connection with Reader";
+				throw new Exception("No Active Connection with Reader");
 			}
 		}
-		return null;
 	}
 
 	// Save tag id from react native.
 	public void saveTagID(String tag) {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
+		if (reader != null && reader.isConnected()) {
 			tagID = tag;
 		}
 	}
 
 	// Flag as locate mode.
 	public void locateMode(boolean value) {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
+		if (reader != null && reader.isConnected()) {
 			isLocateMode = value;
 			if (!isLocateMode) {
 				isLocatingTag = true;
@@ -914,279 +804,204 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		}
 	}
 
-	// Flag as Tag IT mode.
-	public void TagITMode(boolean value) {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-			isTagITMode = value;
-		}
-	}
-
-	// Flag as Audit mode.
-	public void AuditMode(boolean value) {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-			isAuditMode = value;
-
-			// if (isAuditMode) {
-			// ChangeBeeperVolume(0);
-			// } else {
-			// ChangeBeeperVolume(1);
-			// }
-		}
-	}
-
-	public void ChangeBeeperVolume(boolean value) {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-			try {
-				rfidReaderDevice.getRFIDReader().Config
-						.setBeeperVolume(value ? BEEPER_VOLUME.HIGH_BEEP : BEEPER_VOLUME.QUIET_BEEP);
-			} catch (InvalidUsageException e) {
-				Log.i("ChangeBeeperVolume", e.getInfo());
-			} catch (OperationFailureException e) {
-				Log.i("ChangeBeeperVolume", e.getVendorMessage());
-			}
+	private void enableBeeper(boolean value) throws Exception {
+		if (reader != null && reader.isConnected()) {
+			reader.Config.setBeeperVolume(value ? BEEPER_VOLUME.HIGH_BEEP : BEEPER_VOLUME.QUIET_BEEP);
+		} else {
+			throw new Exception("Reader is not connected");
 		}
 	}
 
 	// Flag as use trigger to read barcode
-	public void TagITReadBarcode(boolean value) {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
+	public void ReadBarcode(boolean value) {
+		if (reader != null && reader.isConnected()) {
 			isReadBarcode = value;
 		}
 	}
 
 	// Clean tags info that is stored in the RFID scanner.
 	public void cleanTags() {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-			rfidReaderDevice.getRFIDReader().Actions.purgeTags();
+		if (reader != null && reader.isConnected()) {
+			reader.Actions.purgeTags();
 			scannedTags = new ArrayList<>();
 		}
 	}
 
-	public WritableMap getAntennaConfig() {
-		WritableMap event = Arguments.createMap();
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-			try {
-				Antennas.AntennaRfConfig antennaRfConfig = this.rfidReaderDevice.getRFIDReader().Config.Antennas
-						.getAntennaRfConfig(1);
-				event.putString("tari", antennaRfConfig.getTari() + "");
-				event.putString("powerLevel", antennaRfConfig.getTransmitPowerIndex() + "");
-				return event;
-			} catch (InvalidUsageException e) {
-				event.putString("error", e.getInfo());
-				return event;
-			} catch (OperationFailureException e) {
-				event.putString("error", e.getVendorMessage());
-				return event;
-			}
-		}
-		return null;
-	}
-
-	public WritableMap getConfig() {
-		WritableMap event = Arguments.createMap();
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
-			try {
-				Antennas.AntennaRfConfig antennaRfConfig = this.rfidReaderDevice.getRFIDReader().Config.Antennas
-						.getAntennaRfConfig(1);
-				DYNAMIC_POWER_OPTIMIZATION dynamicPowerSettings = this.rfidReaderDevice.getRFIDReader().Config
-						.getDPOState();
-				event.putString("tari", antennaRfConfig.getTari() + "");
-				event.putString("powerLevel", antennaRfConfig.getTransmitPowerIndex() + "");
-				event.putInt("DPO_status", dynamicPowerSettings.getValue());
-				return event;
-			} catch (InvalidUsageException e) {
-				event.putString("error", e.getInfo());
-				return event;
-			} catch (OperationFailureException e) {
-				event.putString("error", e.getVendorMessage());
-				return event;
-			}
-		}
-		event.putString("error", "No Active Connection with Reader");
-		return event;
-	}
-
-	public boolean saveAntennaConfig(ReadableMap config) throws Exception {
-		if (this.rfidReaderDevice != null && this.rfidReaderDevice.getRFIDReader().isConnected()) {
+	public boolean setAntennaConfig(ReadableMap config) throws Exception {
+		if (reader != null && reader.isConnected()) {
 			if (config == null) {
 				throw new Exception("Config cannot be empty");
-//				return "Config cannot be empty";
 			}
-
-			if (this.reading) {
-				this.cancel();
+			if (reading) {
+				cancel();
 			}
 
 			if (config.hasKey("antennaLevel")) {
 				try {
-					Antennas.AntennaRfConfig antennaRfConfig = this.rfidReaderDevice.getRFIDReader().Config.Antennas
+					Antennas.AntennaRfConfig antennaRfConfig = reader.Config.Antennas
 							.getAntennaRfConfig(1);
 					int index = Integer.parseInt(config.getString("antennaLevel"));
 					antennaRfConfig.setTransmitPowerIndex(index * 10);
-					this.rfidReaderDevice.getRFIDReader().Config.Antennas.setAntennaRfConfig(1, antennaRfConfig);
-//					return "Antenna config changed to " + index;
-//					return true;
+					reader.Config.Antennas.setAntennaRfConfig(1, antennaRfConfig);
 				} catch (InvalidUsageException e) {
 					throw e;
-//					return e.getInfo();
 				} catch (OperationFailureException e) {
 					throw e;
-//					return e.getVendorMessage();
 				} catch (NumberFormatException e) {
 					throw e;
-//					return e.getMessage();
 				}
 			}
 			if (config.hasKey("singulationControl")) {
 				int index = Integer.parseInt(config.getString("singulationControl"));
 				try {
-					Antennas.SingulationControl singulationControl = this.rfidReaderDevice
-							.getRFIDReader().Config.Antennas.getSingulationControl(1);
+					Antennas.SingulationControl singulationControl = reader.Config.Antennas.getSingulationControl(1);
 					singulationControl.setTagPopulation((short) 600);
-					rfidReaderDevice.getRFIDReader().Config.Antennas.setSingulationControl(1, singulationControl);
+					reader.Config.Antennas.setSingulationControl(1, singulationControl);
 				} catch (InvalidUsageException e) {
 					throw e;
-//					Log.i("SingulationControl", e.getMessage());
 				} catch (OperationFailureException e) {
 					throw e;
-//					Log.i("SingulationControl", e.getMessage());
 				}
 			}
 			return true;
 		} else {
 			throw new Exception("No Active Connection with Reader");
 		}
-//		return "No Active Connection with Reader";
 	}
 
 	@Override
-	public void eventReadNotify(RfidReadEvents rfidReadEvents) {
-		// reader not active
-		if (rfidReaderDevice == null)
-			return;
-		RFIDReader rfidReader = rfidReaderDevice.getRFIDReader();
+	public void RFIDReaderAppeared(ReaderDevice readerDevice) {
+		Log.e("RFIDReaderAppeared", readerDevice.getName() + " is available.");
+	}
 
-		final TagData[] myTags = rfidReader.Actions.getReadTags(100);
-		if (myTags != null) {
-			for (int index = 0; index < myTags.length; index++) {
-				if (myTags[index].getOpCode() == ACCESS_OPERATION_CODE.ACCESS_OPERATION_READ
-						&& myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS) {
-					Log.i("RFID", "Tag ID = " + myTags[index]);
-				}
+	@Override
+	public void RFIDReaderDisappeared(ReaderDevice readerDevice) {
+		Log.e("RFIDReaderAppeared", readerDevice.getName() + " is unavailable.");
+	}
 
-				Log.i("RFID", "Tag ID = " + myTags[index].getTagID());
+	private class EventHandler implements RfidEventsListener {
+		//Read tag handler
+		@Override
+		public void eventReadNotify(RfidReadEvents rfidReadEvents) {
+			// reader not active
+			if (reader == null)
+				return;
 
-				if (myTags[index].isContainsLocationInfo()) {
-					final int tag = index;
-					short tagProximityPercent = myTags[tag].LocationInfo.getRelativeDistance();
-					WritableMap event = Arguments.createMap();
-					event.putInt("distance", tagProximityPercent);
-					dispatchEvent("locateTag", event);
-				}
-				if (myTags[index] != null && (myTags[index].getOpStatus() == null
-						|| myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS)) {
-					String EPC = myTags[index].getTagID();
-					if (!isLocateMode) {
-						if (currentRoute != null && currentRoute.equals("tagit")) {
-//							this.cancel();
-							addTagToList(EPC);
-							if (scannedTags.size() == 1) {
-//								boolean result = addTagToList(EPC);
-//								this.dispatchEvent("TagEvent", myTags[index].getTagID());
-								this.dispatchEvent("TagEvent", scannedTags.get(0));
-							}
-							return;
-//							break;
-						} else {
-							boolean result = addTagToList(EPC);
-//							for (int i = 0; i < scannedTags.size(); i++) {
-//								if (scannedTags.get(i).equals(myTags[index].getTagID())) {
-//									result = true;
-//									break;
-//								}
-//							}
-							if (result) {
-//								scannedTags.add(EPC);
-								this.dispatchEvent("TagEvent", EPC);
+			final TagData[] myTags = reader.Actions.getReadTags(100);
+			if (myTags != null) {
+				for (int index = 0; index < myTags.length; index++) {
+					if (myTags[index].getOpCode() == ACCESS_OPERATION_CODE.ACCESS_OPERATION_READ
+							&& myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS) {
+						Log.i("RFID", "Tag ID = " + myTags[index]);
+					}
+
+					Log.i("RFID", "Tag ID = " + myTags[index].getTagID());
+
+					if (myTags[index].isContainsLocationInfo()) {
+						final int tag = index;
+						short tagProximityPercent = myTags[tag].LocationInfo.getRelativeDistance();
+						WritableMap event = Arguments.createMap();
+						event.putInt("distance", tagProximityPercent);
+						dispatchEvent("locateTag", event);
+					}
+
+					if (myTags[index] != null && (myTags[index].getOpStatus() == null
+							|| myTags[index].getOpStatus() == ACCESS_OPERATION_STATUS.ACCESS_SUCCESS)) {
+						String EPC = myTags[index].getTagID();
+						int rssi = myTags[index].getPeakRSSI();
+						if (!isLocateMode) {
+							if (currentRoute != null && currentRoute.equals("tagit")) {
+								if (rssi > -40) {
+									boolean result = addTagToList(EPC);
+									if (result && scannedTags.size() == 1) {
+										dispatchEvent("TagEvent", EPC);
+										return;
+									}
+								}
+							} else {
+								boolean result = addTagToList(EPC);
+								if (result) {
+									dispatchEvent("TagEvent", EPC);
+								}
 							}
 						}
 					}
 				}
 			}
 		}
-	}
 
-	@Override
+		//Status handler
+		@Override
+		public void eventStatusNotify(RfidStatusEvents rfidStatusEvents) {
+			Log.d("eventStatusNotify", "Status Notification: " + rfidStatusEvents.StatusEventData.getStatusEventType());
+			WritableMap event = Arguments.createMap();
 
-	public void eventStatusNotify(RfidStatusEvents rfidStatusEvents) {
-		WritableMap event = Arguments.createMap();
-
-		STATUS_EVENT_TYPE statusEventType = rfidStatusEvents.StatusEventData.getStatusEventType();
-		if (statusEventType == STATUS_EVENT_TYPE.INVENTORY_START_EVENT) {
-			event.putString("RFIDStatusEvent", "inventoryStart");
-			reading = true;
-		} else if (statusEventType == STATUS_EVENT_TYPE.INVENTORY_STOP_EVENT) {
-			event.putString("RFIDStatusEvent", "inventoryStop");
-			reading = false;
-		} else if (statusEventType == STATUS_EVENT_TYPE.DISCONNECTION_EVENT) {
-			event.putString("RFIDStatusEvent", "disconnect");
-			reading = false;
-			tempDisconnected = true;
-		} else if (statusEventType == STATUS_EVENT_TYPE.BATCH_MODE_EVENT) {
-			event.putString("RFIDStatusEvent", "batchMode");
-			Log.i("RFID", "batch mode event: " + rfidStatusEvents.StatusEventData.BatchModeEventData.toString());
-		} else if (statusEventType == STATUS_EVENT_TYPE.BATTERY_EVENT) {
-			int level = rfidStatusEvents.StatusEventData.BatteryData.getLevel();
-			batteryLevel = level;
-			// event.putString("RFIDStatusEvent", "battery " + level);
-			Log.i("RFID", "battery level " + level);
-		} else if (statusEventType == STATUS_EVENT_TYPE.HANDHELD_TRIGGER_EVENT) {
-			HANDHELD_TRIGGER_EVENT_TYPE eventData = rfidStatusEvents.StatusEventData.HandheldTriggerEventData
-					.getHandheldEvent();
-			if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED) {
-				if (isLocateMode) {
-					this.LoopForLocateTag();
-				} else if (isReadBarcode) {
-					if (barcodeDeviceConnected) {
-						barcodePullTrigger();
-					} else {
-						dispatchEvent("BarcodeTrigger", true);
+			STATUS_EVENT_TYPE statusEventType = rfidStatusEvents.StatusEventData.getStatusEventType();
+			if (statusEventType == STATUS_EVENT_TYPE.INVENTORY_START_EVENT) {
+				event.putString("RFIDStatusEvent", "inventoryStart");
+			} else if (statusEventType == STATUS_EVENT_TYPE.INVENTORY_STOP_EVENT) {
+				event.putString("RFIDStatusEvent", "inventoryStop");
+			} else if (statusEventType == STATUS_EVENT_TYPE.DISCONNECTION_EVENT) {
+				event.putString("RFIDStatusEvent", "disconnect");
+				disconnect();
+			} else if (statusEventType == STATUS_EVENT_TYPE.BATCH_MODE_EVENT) {
+				event.putString("RFIDStatusEvent", "batchMode");
+				Log.i("RFID", "batch mode event: " + rfidStatusEvents.StatusEventData.BatchModeEventData.toString());
+			} else if (statusEventType == STATUS_EVENT_TYPE.BATTERY_EVENT) {
+				int level = rfidStatusEvents.StatusEventData.BatteryData.getLevel();
+				WritableMap event2 = Arguments.createMap();
+				event2.putBoolean("ConnectionState", true);
+				event2.putString("BatteryLevel", String.valueOf(level));
+				dispatchEvent("RFIDStatusEvent", event2);
+			} else if (statusEventType == STATUS_EVENT_TYPE.HANDHELD_TRIGGER_EVENT) {
+				HANDHELD_TRIGGER_EVENT_TYPE eventData = rfidStatusEvents.StatusEventData.HandheldTriggerEventData
+						.getHandheldEvent();
+				if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED) {
+					try {
+						if (isLocateMode) {
+							LoopForLocateTag();
+						} else if (isReadBarcode) {
+							if (barcodeDeviceConnected) {
+								barcodePullTrigger();
+							} else {
+								dispatchEvent("BarcodeTrigger", true);
+							}
+						} else if (currentRoute != null) {
+							read();
+						}
+					} catch (Exception e) {
+						HandleError(e.getMessage(), "TriggerPressed");
 					}
-
-				} else {
-					this.read(this.config);
-				}
-
-			} else if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED) {
-				if (isLocateMode) {
-					this.isLocatingTag = true;
-					this.LoopForLocateTag();
-				} else if (isReadBarcode) {
-					if (barcodeDeviceConnected) {
-						barcodeReleaseTrigger();
-					} else {
-						dispatchEvent("BarcodeTrigger", false);
-					}
-
-				} else {
-					this.cancel();
-					rfidReaderDevice.getRFIDReader().Actions.purgeTags();
-					if (currentRoute != null && currentRoute.equals("tagit")) {
-						scannedTags = new ArrayList<>();
-					}
-
-					if (isTagITMode || isAuditMode) {
-
+				} else if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED) {
+					try {
+						if (isLocateMode) {
+							isLocatingTag = true;
+							LoopForLocateTag();
+						} else if (isReadBarcode) {
+							if (barcodeDeviceConnected) {
+								barcodeReleaseTrigger();
+							} else {
+								dispatchEvent("BarcodeTrigger", false);
+							}
+						} else {
+							cancel();
+							reader.Actions.purgeTags();
+							if (currentRoute != null && currentRoute.equals("tagit")) {
+								scannedTags = new ArrayList<>();
+							}
+						}
+					} catch (Exception e) {
+						HandleError(e.getMessage(), "TriggerReleased");
 					}
 				}
 			}
-		}
-		if (event.hasKey("RFIDStatusEvent")) {
-			this.dispatchEvent("RFIDStatusEvent", event);
+			if (event.hasKey("RFIDStatusEvent")) {
+				dispatchEvent("RFIDStatusEvent", event);
+			}
 		}
 	}
 
-	private boolean addTagToList(String strEPC) {
+	private static boolean addTagToList(String strEPC) {
 		if (strEPC != null) {
 			if (!checkIsExisted(strEPC)) {
 				scannedTags.add(strEPC);
@@ -1196,7 +1011,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		return false;
 	}
 
-	private boolean checkIsExisted(String strEPC) {
+	private static boolean checkIsExisted(String strEPC) {
 		for (int i = 0; i < scannedTags.size(); i++) {
 			String tag = scannedTags.get(i);
 			if (strEPC != null && strEPC.equals(tag)) {
@@ -1205,4 +1020,13 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements RfidEve
 		}
 		return false;
 	}
+
+	private void HandleError(String error, String code) {
+		Log.e(code, error);
+		WritableMap map = Arguments.createMap();
+		map.putString("code", code);
+		map.putString("message", error);
+		dispatchEvent("HandleError", map);
+	}
+
 }

@@ -1,6 +1,7 @@
 export const RFIDScannerEvent = {
 	TAG: 'TagEvent',
 	TAGS: 'tags',
+	HANDLE_ERROR:'HandleError',
 	ERROR: 'error',
 	WRITETAG: 'writeTag',
 	BARCODE: 'barcode',

@@ -58,13 +58,6 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 		}
 	}
 
-	@Override
-	public void onCatalystInstanceDestroy() {
-		if (this.scannerthread != null) {
-			this.scannerthread.onCatalystInstanceDestroy();
-		}
-	}
-
 	@ReactMethod
 	public void InitialThread() {
 		try {
@@ -101,6 +94,18 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
+	public void connect(Promise promise) {
+		try {
+			if (this.scannerthread != null) {
+				this.scannerthread.connect();
+			}
+		} catch (Exception error) {
+			promise.reject(error);
+		}
+
+	}
+
+	@ReactMethod
 	public void GetAvailableBluetoothDevices(Promise promise) {
 		if (this.scannerthread != null) {
 			try {
@@ -116,18 +121,6 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	public void SaveSelectedScanner(String item) {
 		if (this.scannerthread != null) {
 			this.scannerthread.SaveSelectedScanner(item);
-		}
-	}
-
-	@ReactMethod
-	public void init(Promise promise) {
-		try {
-			if (this.scannerthread != null) {
-				this.scannerthread.init(reactContext);
-				promise.resolve(true);
-			}
-		} catch (Exception err) {
-			promise.reject(err);
 		}
 	}
 
@@ -162,9 +155,14 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void barcodeDisconnect() {
-		if (this.scannerthread != null) {
-			this.scannerthread.barcodeDisconnect();
+	public void barcodeDisconnect(Promise promise) {
+		try {
+			if (this.scannerthread != null) {
+				this.scannerthread.barcodeDisconnect();
+				promise.resolve(true);
+			}
+		} catch (Exception err) {
+			promise.reject(err);
 		}
 	}
 
@@ -192,40 +190,6 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void barcodePullTrigger() {
-		if (this.scannerthread != null) {
-			this.scannerthread.barcodePullTrigger();
-		}
-	}
-
-	@ReactMethod
-	public void barcodeReleaseTrigger() {
-		if (this.scannerthread != null) {
-			this.scannerthread.barcodeReleaseTrigger();
-		}
-	}
-
-	@ReactMethod
-	public void reconnect(Promise promise) {
-		try {
-			if (this.scannerthread != null) {
-				this.scannerthread.reconnect();
-				promise.resolve("");
-			}
-		} catch (Exception err) {
-			promise.reject(err);
-		}
-
-	}
-
-	@ReactMethod
-	public void switchDPO(boolean value, Callback callback) {
-		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.switchDPO(value));
-		}
-	}
-
-	@ReactMethod
 	public void saveTagID(String tag) {
 		if (this.scannerthread != null) {
 			this.scannerthread.saveTagID(tag);
@@ -240,24 +204,10 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void TagITMode(boolean isTagITMode) {
+	public void ReadBarcode(boolean isReadBarcode, Promise promise) {
 		if (this.scannerthread != null) {
-			this.scannerthread.TagITMode(isTagITMode);
-		}
-	}
-
-	@ReactMethod
-	public void TagITReadBarcode(boolean isReadBarcode, Promise promise) {
-		if (this.scannerthread != null) {
-			this.scannerthread.TagITReadBarcode(isReadBarcode);
-			promise.resolve("Done");
-		}
-	}
-
-	@ReactMethod
-	public void AuditMode(boolean isAuditMode) {
-		if (this.scannerthread != null) {
-			this.scannerthread.AuditMode(isAuditMode);
+			this.scannerthread.ReadBarcode(isReadBarcode);
+			promise.resolve(true);
 		}
 	}
 
@@ -272,7 +222,8 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	public void writeTag(String targetTag, String newTag, Promise promise) {
 		try {
 			if (this.scannerthread != null) {
-				promise.resolve(this.scannerthread.writeTag(targetTag, newTag));
+				this.scannerthread.writeTag(targetTag, newTag);
+				promise.resolve(true);
 			}
 		} catch (Exception err) {
 			promise.reject(err);
@@ -281,23 +232,9 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void read(ReadableMap config) {
-		if (this.scannerthread != null) {
-			this.scannerthread.read(config);
-		}
-	}
-
-	@ReactMethod
 	public void cleanTags() {
 		if (this.scannerthread != null) {
 			this.scannerthread.cleanTags();
-		}
-	}
-
-	@ReactMethod
-	public void cancel() {
-		if (this.scannerthread != null) {
-			this.scannerthread.cancel();
 		}
 	}
 
@@ -309,34 +246,13 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 	}
 
 	@ReactMethod
-	public void getConfig(Callback callback) {
-		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.getConfig());
-		}
-	}
-
-	@ReactMethod
-	public void getAntennaConfig(Callback callback) {
-		if (this.scannerthread != null) {
-			callback.invoke(this.scannerthread.getAntennaConfig());
-		}
-	}
-
-	@ReactMethod
-	public void saveAntennaConfig(ReadableMap config, Promise promise) {
+	public void setAntennaConfig(ReadableMap config, Promise promise) {
 		if (this.scannerthread != null) {
 			try {
-				promise.resolve(this.scannerthread.saveAntennaConfig(config));
+				promise.resolve(this.scannerthread.setAntennaConfig(config));
 			} catch (Exception err) {
 				promise.reject(err);
 			}
-		}
-	}
-
-	@ReactMethod
-	public void ChangeBeeperVolume(boolean value) {
-		if (this.scannerthread != null) {
-			this.scannerthread.ChangeBeeperVolume(value);
 		}
 	}
 
