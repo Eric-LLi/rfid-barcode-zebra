@@ -172,7 +172,7 @@ public class RNRfidBarcodeZebraModule extends ReactContextBaseJavaModule impleme
 			if (this.scannerthread != null) {
 				this.scannerthread.SaveCurrentRoute(value);
 			}
-			promise.resolve("Done");
+			promise.resolve(true);
 		} catch (Exception err) {
 			promise.reject(err);
 		}

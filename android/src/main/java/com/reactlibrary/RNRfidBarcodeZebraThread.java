@@ -502,8 +502,14 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 
 	public void SaveCurrentRoute(String value) throws Exception {
 
-		currentRoute = value;
+		if (reading)
+			cancel();
 
+		if (isLocatingTag)
+			executeLocateTag(false);
+		
+		currentRoute = value;
+		isLocateMode = false;
 		if (currentRoute != null && currentRoute.equalsIgnoreCase("tagit")) {
 			enableDPO(false);
 		} else if (currentRoute != null && currentRoute.equalsIgnoreCase("locateTag")) {
@@ -790,9 +796,9 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		}
 	}
 
-	private void executeLocateTag() throws Exception {
+	private void executeLocateTag(boolean isStart) throws Exception {
 		if (reader != null && reader.isConnected()) {
-			if (!isLocatingTag) {
+			if (isStart) {
 				if (tagID != null) {
 					isLocatingTag = true;
 
@@ -966,7 +972,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 						String EPC = myTag.getTagID();
 						int rssi = myTag.getPeakRSSI();
 						if (!isLocateMode) {
-							if (currentRoute != null && currentRoute.equals("tagit")) {
+							if (currentRoute != null && currentRoute.equalsIgnoreCase("tagit")) {
 								if (rssi > -40) {
 									boolean result = addTagToList(EPC);
 									if (result && scannedTags.size() == 1) {
@@ -1015,8 +1021,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 				if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED) {
 					try {
 						if (isLocateMode) {
-							executeLocateTag();
-//							LoopForLocateTag();
+							executeLocateTag(true);
 						} else if (isReadBarcode) {
 							if (barcodeDeviceConnected) {
 								barcodePullTrigger();
@@ -1032,9 +1037,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 				} else if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED) {
 					try {
 						if (isLocateMode) {
-							executeLocateTag();
-//							isLocatingTag = true;
-//							LoopForLocateTag();
+							executeLocateTag(false);
 						} else if (isReadBarcode) {
 							if (barcodeDeviceConnected) {
 								barcodeReleaseTrigger();
@@ -1044,7 +1047,8 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 						} else {
 							cancel();
 							reader.Actions.purgeTags();
-							if (currentRoute != null && currentRoute.equals("tagit")) {
+							if (currentRoute != null && (currentRoute.equalsIgnoreCase("tagit") ||
+									currentRoute.equalsIgnoreCase("lookup"))) {
 								scannedTags = new ArrayList<>();
 							}
 						}
