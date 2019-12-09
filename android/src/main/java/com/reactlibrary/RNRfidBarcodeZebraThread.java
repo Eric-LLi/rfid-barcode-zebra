@@ -507,7 +507,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 
 		if (isLocatingTag)
 			executeLocateTag(false);
-		
+
 		currentRoute = value;
 		isLocateMode = false;
 		if (currentRoute != null && currentRoute.equalsIgnoreCase("tagit")) {
@@ -1020,36 +1020,41 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 						.getHandheldEvent();
 				if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED) {
 					try {
-						if (isLocateMode) {
-							executeLocateTag(true);
-						} else if (isReadBarcode) {
-							if (barcodeDeviceConnected) {
-								barcodePullTrigger();
+						if (currentRoute != null) {
+							if (isLocateMode) {
+								executeLocateTag(true);
+							} else if (isReadBarcode) {
+								if (barcodeDeviceConnected) {
+									barcodePullTrigger();
+								} else {
+									dispatchEvent("BarcodeTrigger", true);
+								}
 							} else {
-								dispatchEvent("BarcodeTrigger", true);
+								read();
 							}
-						} else if (currentRoute != null) {
-							read();
 						}
 					} catch (Exception e) {
 						HandleError(e.getMessage(), "TriggerPressed");
 					}
 				} else if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED) {
+
 					try {
-						if (isLocateMode) {
-							executeLocateTag(false);
-						} else if (isReadBarcode) {
-							if (barcodeDeviceConnected) {
-								barcodeReleaseTrigger();
+						if (currentRoute != null) {
+							if (isLocateMode) {
+								executeLocateTag(false);
+							} else if (isReadBarcode) {
+								if (barcodeDeviceConnected) {
+									barcodeReleaseTrigger();
+								} else {
+									dispatchEvent("BarcodeTrigger", false);
+								}
 							} else {
-								dispatchEvent("BarcodeTrigger", false);
-							}
-						} else {
-							cancel();
-							reader.Actions.purgeTags();
-							if (currentRoute != null && (currentRoute.equalsIgnoreCase("tagit") ||
-									currentRoute.equalsIgnoreCase("lookup"))) {
-								scannedTags = new ArrayList<>();
+								cancel();
+								reader.Actions.purgeTags();
+								if (currentRoute.equalsIgnoreCase("tagit") ||
+										currentRoute.equalsIgnoreCase("lookup")) {
+									scannedTags = new ArrayList<>();
+								}
 							}
 						}
 					} catch (Exception e) {
