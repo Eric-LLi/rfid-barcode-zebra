@@ -52,7 +52,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	private static boolean barcodeDeviceConnected = false;
 	private static int BarcodeScannerID = 0;
 
-	public RNRfidBarcodeZebraThread(ReactApplicationContext context) {
+	RNRfidBarcodeZebraThread(ReactApplicationContext context) {
 		this.context = context;
 		eventHandler = new EventHandler();
 		init();
@@ -66,7 +66,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 
 	public abstract void dispatchEvent(String name, boolean data);
 
-	public void onHostResume() {
+	void onHostResume() {
 		// if (readers != null) {
 		// this.connect();
 		// } else {
@@ -74,14 +74,14 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		// }
 	}
 
-	public void onHostPause() {
+	void onHostPause() {
 		// if (this.reading) {
 		// this.cancel();
 		// }
 		// this.disconnect();
 	}
 
-	public void onHostDestroy() {
+	void onHostDestroy() {
 		shutdown();
 		barcodeDisconnect();
 	}
@@ -104,7 +104,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	}
 
 	// Using barcode library to connect RFID scanner.
-	public boolean barcodeConnect() throws Exception {
+	boolean barcodeConnect() throws Exception {
 		if (barcodeDeviceConnected) {
 			barcodeDisconnect();
 		}
@@ -174,7 +174,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	}
 
 	// Barcode disconnect
-	public void barcodeDisconnect() {
+	void barcodeDisconnect() {
 		if (barcodeDeviceConnected) {
 			sdkHandler.dcssdkTerminateCommunicationSession(BarcodeScannerID);
 			barcodeDeviceConnected = false;
@@ -260,7 +260,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		// this.dispatchEvent("barcode", "dcssdkEventScannerAppeared");
 	}
 
-	public WritableArray GetAvailableBluetoothDevices() throws Exception {
+	WritableArray GetAvailableBluetoothDevices() throws Exception {
 		WritableArray list = Arguments.createArray();
 		if (readers == null) {
 			readers = new Readers(this.context, ENUM_TRANSPORT.BLUETOOTH);
@@ -289,7 +289,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		reading = false;
 	}
 
-	public void connect() throws Exception {
+	void connect() throws Exception {
 		String err = null;
 		if (reader != null) {
 			if (reader.isConnected())
@@ -487,7 +487,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		}
 	}
 
-	public void shutdown() {
+	void shutdown() {
 		if (reader != null) {
 			disconnect();
 			reader = null;
@@ -500,7 +500,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		deviceList = null;
 	}
 
-	public void SaveCurrentRoute(String value) throws Exception {
+	void SaveCurrentRoute(String value) throws Exception {
 
 		if (reading)
 			cancel();
@@ -518,14 +518,15 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		} else {
 			enableDPO(true);
 			enableBeeper(false);
+			isReadBarcode = false;
 		}
 	}
 
-	public void SaveSelectedScanner(String scanner) {
+	void SaveSelectedScanner(String scanner) {
 		selectedScanner = scanner;
 	}
 
-	public String GetConnectedReader() {
+	String GetConnectedReader() {
 		if (reader != null && reader.isConnected())
 			return reader.getHostName();
 		else {
@@ -579,7 +580,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	}
 
 	// Check RFID scanner is connected or not.
-	public boolean isConnected() {
+	boolean isConnected() {
 		if (reader != null) {
 			return reader.isConnected();
 		} else {
@@ -587,7 +588,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 		}
 	}
 
-	public boolean AttemptToReconnect() throws Exception {
+	boolean AttemptToReconnect() throws Exception {
 		if (selectedScanner != null) {
 			connect();
 			barcodeConnect();
@@ -702,7 +703,7 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 //	}
 
 	// Program tag
-	public void writeTag(final String targetTag, String newTag) throws Exception {
+	void writeTag(final String targetTag, String newTag) throws Exception {
 		if (!isProgrammingTag) {
 			if (reader != null && reader.isConnected()) {
 				if (reading) {
@@ -779,14 +780,14 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	}
 
 	// Save tag id from react native.
-	public void saveTagID(String tag) {
+	void saveTagID(String tag) {
 		if (reader != null && reader.isConnected()) {
 			tagID = tag;
 		}
 	}
 
 	// Flag as locate mode.
-	public void locateMode(boolean value) {
+	void locateMode(boolean value) {
 		if (reader != null && reader.isConnected()) {
 			isLocateMode = value;
 //			if (!isLocateMode) {
@@ -876,21 +877,21 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 	}
 
 	// Flag as use trigger to read barcode
-	public void ReadBarcode(boolean value) {
+	void ReadBarcode(boolean value) {
 		if (reader != null && reader.isConnected()) {
 			isReadBarcode = value;
 		}
 	}
 
 	// Clean tags info that is stored in the RFID scanner.
-	public void cleanTags() {
+	void cleanTags() {
 		if (reader != null && reader.isConnected()) {
 			reader.Actions.purgeTags();
 			scannedTags = new ArrayList<>();
 		}
 	}
 
-	public boolean setAntennaConfig(ReadableMap config) throws Exception {
+	boolean setAntennaConfig(ReadableMap config) throws Exception {
 		if (reader != null && reader.isConnected()) {
 			if (config == null) {
 				throw new Exception("Config cannot be empty");
@@ -1020,41 +1021,36 @@ public abstract class RNRfidBarcodeZebraThread extends Thread implements Readers
 						.getHandheldEvent();
 				if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED) {
 					try {
-						if (currentRoute != null) {
-							if (isLocateMode) {
-								executeLocateTag(true);
-							} else if (isReadBarcode) {
-								if (barcodeDeviceConnected) {
-									barcodePullTrigger();
-								} else {
-									dispatchEvent("BarcodeTrigger", true);
-								}
+						if (isLocateMode) {
+							executeLocateTag(true);
+						} else if (isReadBarcode) {
+							if (barcodeDeviceConnected) {
+								barcodePullTrigger();
 							} else {
-								read();
+								dispatchEvent("BarcodeTrigger", true);
 							}
+						} else if (currentRoute != null) {
+							read();
 						}
 					} catch (Exception e) {
 						HandleError(e.getMessage(), "TriggerPressed");
 					}
 				} else if (eventData == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED) {
-
 					try {
-						if (currentRoute != null) {
-							if (isLocateMode) {
-								executeLocateTag(false);
-							} else if (isReadBarcode) {
-								if (barcodeDeviceConnected) {
-									barcodeReleaseTrigger();
-								} else {
-									dispatchEvent("BarcodeTrigger", false);
-								}
+						if (isLocateMode) {
+							executeLocateTag(false);
+						} else if (isReadBarcode) {
+							if (barcodeDeviceConnected) {
+								barcodeReleaseTrigger();
 							} else {
-								cancel();
-								reader.Actions.purgeTags();
-								if (currentRoute.equalsIgnoreCase("tagit") ||
-										currentRoute.equalsIgnoreCase("lookup")) {
-									scannedTags = new ArrayList<>();
-								}
+								dispatchEvent("BarcodeTrigger", false);
+							}
+						} else {
+							cancel();
+							reader.Actions.purgeTags();
+							if (currentRoute != null && (currentRoute.equalsIgnoreCase("tagit") ||
+									currentRoute.equalsIgnoreCase("lookup"))) {
+								scannedTags = new ArrayList<>();
 							}
 						}
 					} catch (Exception e) {
